@@ -12,4 +12,8 @@ export default defineConfig({
   integrations: [react(), copyLint()],
   devToolbar: { enabled: false },
   build: { inlineStylesheets: 'auto' },
+  // Astro's built-in check compares the browser's Origin with the URL the Worker sees. Behind Webflow's proxy
+  // those differ (equicityseo.com vs the Worker host), so every form post failed. src/middleware.ts does a
+  // proxy-aware check instead.
+  security: { checkOrigin: false },
 });
