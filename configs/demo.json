@@ -1,0 +1,70 @@
+{
+  "slug": "demo",
+  "firstName": "Sam",
+  "business": "Cedar Lane Physical Therapy",
+  "businessShort": "Cedar Lane",
+  "domain": "example.com",
+  "ownerName": "Evan",
+  "accessEmail": "evan@equicityseo.com",
+  "welcomeNote": "This is a demo blueprint for testing. Tap around freely; nothing here is a real client.",
+  "timeTargetMinutes": 20,
+  "brand": {
+    "primary": "#2F6F62",
+    "primaryName": "green",
+    "primaryConfirmed": true,
+    "background": "#FFFFFF",
+    "sampleLine": "Physical therapy in Everett",
+    "sampleHeadline": "Move like yourself again",
+    "sampleCta": "Book a visit"
+  },
+  "palettes": [
+    { "id": "forest", "name": "Green, white, charcoal", "note": "Clean and clinical", "bg": "#FFFFFF", "text": "#22272B", "accent": "{primary}", "accentText": "{primary}", "onAccent": "#FFFFFF", "band": "#22272B", "bandInk": "#FFFFFF" },
+    { "id": "sand", "name": "Green, sand, ink", "note": "Warm and local", "bg": "#F6F1E8", "text": "#1E2421", "accent": "{primary}", "accentText": "{primary}", "onAccent": "#FFFFFF", "band": "{primary}", "bandInk": "#F6F1E8" },
+    { "id": "mist", "name": "Green, mist, navy", "note": "Calm and modern", "bg": "#F2F6F5", "text": "#1C2B3A", "accent": "{primary}", "accentText": "{primary}", "onAccent": "#FFFFFF", "band": "#1C2B3A", "bandInk": "#F2F6F5" }
+  ],
+  "examples": [
+    { "id": "equicity", "name": "Equicity", "url": "https://equicityseo.com/", "why": "A boutique agency site with lots of white space." },
+    { "id": "perel", "name": "Esther Perel", "url": "https://www.estherperel.com/", "why": "Editorial and elegant." },
+    { "id": "brown", "name": "Brené Brown", "url": "https://brenebrown.com/", "why": "Warm and personal." }
+  ],
+  "services": ["Sports injuries", "Back and neck pain", "Post-surgery rehab"],
+  "pages": [
+    { "id": "home", "name": "Home", "group": "core" },
+    { "id": "about", "name": "About", "group": "core" },
+    { "id": "contact", "name": "Contact", "group": "core" },
+    { "id": "sports", "name": "Sports injuries", "group": "services" },
+    { "id": "back", "name": "Back and neck pain", "group": "services" },
+    { "id": "rehab", "name": "Post-surgery rehab", "group": "services" },
+    { "id": "blog", "name": "Blog", "group": "work" }
+  ],
+  "prefill": {
+    "nameOnSite": "Sam Rivera, DPT",
+    "title": "Owner and Physical Therapist",
+    "location": "Everett, WA",
+    "publicEmail": "hello@example.com",
+    "credentials": ["DPT"],
+    "neverImagery": ["Stock photos of people grimacing in pain"]
+  },
+  "workModes": ["In the clinic", "Home visits", "Online sessions"],
+  "workModesPrompt": "Where do you see patients?",
+  "successOptions": ["More inquiries", "Better-fit inquiries", "Fewer phone calls about the basics"],
+  "feelingPrompt": "Someone lands on your site with a sore back and a busy week. What should they feel first?",
+  "feelings": ["Reassured", "In good hands", "Energized", "Welcome", "Ready to book"],
+  "audiences": ["Weekend athletes", "Office workers", "People after surgery", "Doctors who refer"],
+  "intakeOptions": ["Name", "Email", "Phone", "What's bothering you", "Insurance", "Best time to reach you"],
+  "leadFlowRecommendation": "paid-first",
+  "modules": { "groups": false, "book": false, "app": false, "partner": false, "podcasts": false, "testimonials": true },
+  "accessItems": ["host", "registrar", "email", "gbp", "gsc-ga"],
+  "dates": {
+    "allDue": "whenever suits you",
+    "homepageDirection": "a few days after you finish",
+    "launchWeek": "about six weeks from kickoff",
+    "timeline": [
+      { "label": "Your homepage direction", "when": "A few days after you finish" },
+      { "label": "Design and build", "when": "Weeks 3 and 4" },
+      { "label": "Your review, two rounds", "when": "Weeks 5 and 6" },
+      { "label": "Launch", "when": "About six weeks from kickoff" }
+    ]
+  },
+  "status": "active"
+}

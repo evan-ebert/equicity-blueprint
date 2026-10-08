@@ -1,0 +1,40 @@
+{
+  "name": "equicity-blueprint",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Equicity Blueprint: the passcode-gated client discovery app mounted at equicityseo.com/blueprint.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "node scripts/lint-copy.mjs && astro check",
+    "db:apply:local": "wrangler d1 migrations apply DB --local",
+    "lint:copy": "node scripts/lint-copy.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "12.6.13",
+    "@astrojs/react": "4.4.2",
+    "@fontsource/caveat-brush": "5.3.0",
+    "@fontsource/libre-caslon-text": "5.3.0",
+    "@fontsource/manrope": "5.3.0",
+    "@fontsource/nunito-sans": "5.3.0",
+    "@fontsource/playfair-display": "5.3.0",
+    "@fontsource/source-sans-3": "5.3.0",
+    "astro": "5.18.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@cloudflare/workers-types": "5.20261008.1",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "typescript": "5.9.3",
+    "wrangler": "4.148.0"
+  }
+}

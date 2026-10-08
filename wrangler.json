@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "equicity-blueprint",
+  "compatibility_date": "2025-04-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "blueprint", "database_id": "0", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "UPLOADS", "bucket_name": "blueprint-uploads" }
+  ]
+}

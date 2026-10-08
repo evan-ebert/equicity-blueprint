@@ -1,0 +1,314 @@
+{
+  "slug": "hart-to-heart",
+  "firstName": "Ernest",
+  "business": "Hart to Heart Consulting",
+  "businessShort": "Hart to Heart",
+  "domain": "harttoheartconsulting.com",
+  "ownerName": "Evan",
+  "accessEmail": "evan@equicityseo.com",
+  "welcomeNote": "This is how we get your design direction right before I build anything. Tap what you love, skip what you're unsure about, and we'll talk through the rest on our call.",
+  "timeTargetMinutes": 20,
+  "brand": {
+    "primary": "#B8913A",
+    "primaryName": "gold",
+    "primaryConfirmed": false,
+    "background": "#FFFFFF",
+    "sampleLine": "Family intervention and repair",
+    "sampleHeadline": "A calm place to begin again",
+    "sampleCta": "Book a free call",
+    "colorWhy": "Gold looks beautiful on buttons and accents, but it's hard to read as body text, so we pair it with a darker color for words."
+  },
+  "palettes": [
+    {
+      "id": "charcoal",
+      "name": "Gold, warm white, charcoal",
+      "note": "Grounded and classic",
+      "bg": "#FBF8F2",
+      "text": "#2B2B2E",
+      "accent": "{primary}",
+      "accentText": "#7A5E22",
+      "onAccent": "#1F1A10",
+      "band": "#2B2B2E",
+      "bandInk": "#FBF8F2"
+    },
+    {
+      "id": "navy",
+      "name": "Gold, ivory, deep navy",
+      "note": "Trusted and professional",
+      "bg": "#FBF6EA",
+      "text": "#1F2A44",
+      "accent": "{primary}",
+      "accentText": "#7A5E22",
+      "onAccent": "#1F1A10",
+      "band": "#1F2A44",
+      "bandInk": "#FBF6EA"
+    },
+    {
+      "id": "sage",
+      "name": "Soft gold, cream, sage",
+      "note": "Calm and natural",
+      "bg": "#F7F2E6",
+      "text": "#2F3A30",
+      "accent": "#C9A963",
+      "accentText": "#6E5A2A",
+      "onAccent": "#1F1A10",
+      "band": "#7D8F78",
+      "bandInk": "#F7F2E6"
+    },
+    {
+      "id": "stone",
+      "name": "Gold, white, warm stone",
+      "note": "Quiet and editorial",
+      "bg": "#FFFFFF",
+      "text": "#3A3532",
+      "accent": "{primary}",
+      "accentText": "#7A5E22",
+      "onAccent": "#1F1A10",
+      "band": "#8C8279",
+      "bandInk": "#FFFFFF"
+    },
+    {
+      "id": "plum",
+      "name": "Gold, white, deep plum",
+      "note": "Warm and personal",
+      "bg": "#FFFFFF",
+      "text": "#3B2238",
+      "accent": "{primary}",
+      "accentText": "#7A5E22",
+      "onAccent": "#1F1A10",
+      "band": "#4A2A45",
+      "bandInk": "#FFFFFF"
+    }
+  ],
+  "examples": [
+    {
+      "id": "coleman",
+      "name": "Dr. Joshua Coleman",
+      "url": "https://www.drjoshuacoleman.com/",
+      "why": "Estrangement work, explained with warmth. Books and a podcast side by side."
+    },
+    {
+      "id": "ramani",
+      "name": "Dr. Ramani",
+      "url": "https://doctor-ramani.com/",
+      "why": "Names narcissism directly, with lots of video and a strong book push."
+    },
+    {
+      "id": "perel",
+      "name": "Esther Perel",
+      "url": "https://www.estherperel.com/",
+      "why": "Editorial and elegant. Podcast, books and events in one place."
+    },
+    {
+      "id": "brown",
+      "name": "Brené Brown",
+      "url": "https://brenebrown.com/",
+      "why": "Warm and personal, with books and a podcast front and center."
+    },
+    {
+      "id": "real",
+      "name": "Terry Real",
+      "url": "https://terryreal.com/",
+      "why": "Clean and calm, with a clear path into his method and his book."
+    }
+  ],
+  "services": [
+    "Family Intervention",
+    "Marriage Repair",
+    "Estrangement and Adult Child Reconnection",
+    "Narcissistic Family Dynamics",
+    "Continuing Care"
+  ],
+  "pages": [
+    {
+      "id": "home",
+      "name": "Home",
+      "group": "core"
+    },
+    {
+      "id": "about",
+      "name": "About",
+      "group": "core"
+    },
+    {
+      "id": "process",
+      "name": "Process",
+      "group": "core"
+    },
+    {
+      "id": "contact",
+      "name": "Contact",
+      "group": "core"
+    },
+    {
+      "id": "family-intervention",
+      "name": "Family Intervention",
+      "group": "services"
+    },
+    {
+      "id": "marriage-repair",
+      "name": "Marriage Repair",
+      "group": "services"
+    },
+    {
+      "id": "estrangement",
+      "name": "Estrangement and Adult Child Reconnection",
+      "group": "services"
+    },
+    {
+      "id": "narcissistic-dynamics",
+      "name": "Narcissistic Family Dynamics",
+      "group": "services"
+    },
+    {
+      "id": "continuing-care",
+      "name": "Continuing Care",
+      "group": "services"
+    },
+    {
+      "id": "groups",
+      "name": "Groups and Cohorts",
+      "group": "work"
+    },
+    {
+      "id": "book",
+      "name": "Book",
+      "group": "work"
+    },
+    {
+      "id": "blog",
+      "name": "Blog",
+      "group": "work"
+    }
+  ],
+  "featureWishOptions": [
+    "Podcast page",
+    "FAQ",
+    "Resources or downloads",
+    "Video",
+    "Newsletter signup",
+    "Photo gallery",
+    "Events"
+  ],
+  "prefill": {
+    "nameOnSite": "Ernest Hart, RS, BS, CAI",
+    "title": "Owner and Lead Interventionist",
+    "location": "Seattle, WA",
+    "publicEmail": "ernest@harttoheartconsulting.com",
+    "credentials": [
+      "RS",
+      "BS",
+      "CAI"
+    ],
+    "neverImagery": [
+      "Stock \"sad person at a window\" shots",
+      "Staged arguments",
+      "Crying close-ups"
+    ]
+  },
+  "workModes": [
+    "In person around Seattle",
+    "Online, anywhere",
+    "I travel to families",
+    "International"
+  ],
+  "workModesPrompt": "Where do you work with families?",
+  "successOptions": [
+    "More inquiries",
+    "Better-fit inquiries",
+    "Group and cohort sign-ups",
+    "Book sales",
+    "Podcast listeners becoming clients"
+  ],
+  "feelingPrompt": "Someone lands on your site late at night after a hard day with their family. What should they feel first?",
+  "feelings": [
+    "Safe",
+    "Understood",
+    "Calm",
+    "Hopeful",
+    "Not alone",
+    "Respected",
+    "Steady",
+    "Relieved",
+    "Ready to reach out"
+  ],
+  "audiences": [
+    "Parents",
+    "Adult children",
+    "Spouses and couples",
+    "Professionals who refer",
+    "Podcast listeners"
+  ],
+  "intakeOptions": [
+    "Name",
+    "Email",
+    "Phone",
+    "Who this is about (me, my child, my spouse, my parent, the whole family)",
+    "A few words about what's going on",
+    "How they heard about you",
+    "Best time to reach them",
+    "Time zone or location"
+  ],
+  "leadFlowRecommendation": "free-call-first",
+  "leadFlowWhy": "Someone reaching out about their family can feel turned away by a card form. A short free call first keeps the door open.",
+  "custom": {
+    "feel": [
+      {
+        "type": "tap",
+        "id": "narcissism-language",
+        "title": "How should the site talk about narcissistic dynamics?",
+        "options": [
+          "Use the term directly",
+          "Use it gently, with context",
+          "Describe the behavior and skip the label"
+        ]
+      }
+    ],
+    "offers": [],
+    "proof": []
+  },
+  "modules": {
+    "groups": true,
+    "book": true,
+    "app": true,
+    "partner": true,
+    "podcasts": true,
+    "testimonials": true
+  },
+  "partnerName": "Marriage Recovery Center",
+  "appName": "Passion.io",
+  "accessItems": [
+    "wordpress",
+    "host",
+    "registrar",
+    "email",
+    "gbp",
+    "gsc-ga",
+    "calendly",
+    "youtube"
+  ],
+  "dates": {
+    "allDue": "Sunday, October 11",
+    "homepageDirection": "Friday, October 16",
+    "launchWeek": "the week of November 30",
+    "timeline": [
+      {
+        "label": "Your homepage direction",
+        "when": "By Friday, October 16"
+      },
+      {
+        "label": "Design and build",
+        "when": "October 19 to October 30"
+      },
+      {
+        "label": "Your review, two rounds",
+        "when": "November 2 to November 20"
+      },
+      {
+        "label": "Launch",
+        "when": "The week of November 30"
+      }
+    ]
+  },
+  "status": "active"
+}
