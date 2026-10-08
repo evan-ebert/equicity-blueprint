@@ -34,6 +34,6 @@ export const POST: APIRoute = async ({ params, request, locals, cookies }) => {
   await clearAttempts(env.DB, key);
   await markOpened(env.DB, slug);
   await logEvent(env.DB, slug, 'opened');
-  if (!row.first_opened_at) await notifySlack(env, `${config.firstName} (${config.business}) just opened their blueprint for the first time.`);
+  if (!row.first_opened_at) await notifySlack(env, `${config.fullName ?? config.firstName} (${config.business}) just opened their blueprint for the first time.`);
   return redirect(slug);
 };

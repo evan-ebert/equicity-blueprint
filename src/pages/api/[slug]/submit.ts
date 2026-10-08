@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ params, locals, cookies, url }) => {
 
   const origin = env.PUBLIC_ORIGIN || url.origin;
   const admin = `${origin}${withBase(`admin/${config.slug}`)}`;
-  const who = `${config.firstName} (${config.business})`;
+  const who = `${config.fullName ?? config.firstName} (${config.business})`;
   const lines: string[] = [];
   if (previous) {
     lines.push(`${who} sent an update. ${changes.length ? `${changes.length} answer${changes.length === 1 ? '' : 's'} changed: ${changes.slice(0, 8).map((c) => c.label).join(', ')}${changes.length > 8 ? ', and more' : ''}.` : 'No answers changed.'}`);

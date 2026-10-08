@@ -50,6 +50,8 @@ const ImageryTile = z.object({
 export const ClientConfigSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/),
   firstName: z.string(),
+  /** Full name for Evan's admin view and Slack. Clients only ever see their first name. */
+  fullName: z.string().optional(),
   business: z.string(),
   businessShort: z.string(),
   domain: z.string(),

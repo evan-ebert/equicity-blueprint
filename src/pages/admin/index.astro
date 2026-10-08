@@ -38,7 +38,7 @@ if (mode === 'list') {
       return {
         slug: c.slug,
         name: c.business,
-        first: c.firstName,
+        first: c.fullName ?? c.firstName,
         status: row?.status ?? 'not-started',
         passcode: !!row?.passcode_hash,
         done: chapters.filter((ch) => chapterProgress(ch, answers) >= 1).length,

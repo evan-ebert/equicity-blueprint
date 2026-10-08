@@ -99,7 +99,7 @@ const eventLabel: Record<string, string> = {
           <span class="eq-eyebrow" style="justify-self:start">{statusLabel(row?.status ?? 'not-started')}</span>
           <h1 class="eq-h1">{config.business}</h1>
           <p class="eq-muted" style="margin:0">
-            {config.firstName}
+            {config.fullName ?? config.firstName}
             {row?.first_opened_at && ` · first opened ${pacific(row.first_opened_at)}`}
             {row?.last_activity_at && ` · active ${ago(row.last_activity_at)}`}
             {row?.submitted_at && ` · sent ${pacific(row.submitted_at)}`}

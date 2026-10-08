@@ -1,6 +1,7 @@
 {
   "slug": "demo",
   "firstName": "Sam",
+  "fullName": "Sam Rivera",
   "business": "Cedar Lane Physical Therapy",
   "businessShort": "Cedar Lane",
   "domain": "example.com",
