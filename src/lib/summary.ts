@@ -151,7 +151,8 @@ export function buildReview(c: ClientConfig, answers: Answers, uploads: UploadIn
       for (const q of s.questions) {
         if (!isAnswerable(q) || !isVisible(q, answers)) continue;
         const a = answers[q.id];
-        const text = a ? summarize(q, a.v, c, uploads) : q.type === 'upload' || q.type === 'extra' || (q.type === 'multi' && q.defaultAll) ? summarize(q, null, c, uploads) : null;
+        const seen = visited.has(`${ch.id}/${s.id}`);
+        const text = a ? summarize(q, a.v, c, uploads) : q.type === 'upload' || q.type === 'extra' || (q.type === 'multi' && q.defaultAll && seen) ? summarize(q, null, c, uploads) : null;
         if (text || a?.exit) items.push({ qid: q.id, label: q.label ?? q.title, text: text ?? '', exit: a?.exit });
       }
       sections.push({ chapterId: ch.id, chapterN: ch.n, screenId: s.id, title: s.eyebrow && s.eyebrow !== s.title ? `${ch.title}: ${s.eyebrow}` : ch.title, items, visited: visited.has(`${ch.id}/${s.id}`) });

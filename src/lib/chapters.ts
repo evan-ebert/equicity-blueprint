@@ -731,6 +731,10 @@ export function hasAnswer(q: Question, a: AnswerValue | undefined): boolean {
 export function answeredShare(chapter: Chapter, answers: Answers): number {
   const qs = chapter.screens.flatMap((s) => s.questions).filter((q) => isAnswerable(q) && !isOptional(q) && isVisible(q, answers));
   if (!qs.length) return 0;
+  // Starting lists (like "Images we should never use") only count once the client has actually begun the chapter.
+  const visited = visitedScreens(answers);
+  const started = qs.some((q) => answers[q.id]) || chapter.screens.some((s) => visited.has(`${chapter.id}/${s.id}`));
+  if (!started) return 0;
   return qs.filter((q) => hasAnswer(q, answers[q.id])).length / qs.length;
 }
 
