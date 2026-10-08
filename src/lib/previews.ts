@@ -65,7 +65,7 @@ export async function removePreview(bucket: R2Bucket, slug: string, id: string) 
 /** Capture every example that isn't saved yet (or all of them when `all`), in a few short rounds. */
 export async function capturePreviews(bucket: R2Bucket, c: ClientConfig, all = false): Promise<{ ready: number; total: number }> {
   const have = new Set(all ? [] : await savedPreviewIds(bucket, c.slug));
-  let todo = c.examples.filter((e) => !have.has(e.id));
+  let todo = c.examples.filter((e) => !e.image && !have.has(e.id));
   // Two short rounds keep the request well under Webflow Cloud's 20 second limit.
   for (let round = 0; round < 2 && todo.length; round++) {
     if (round > 0) await new Promise((r) => setTimeout(r, 6000));

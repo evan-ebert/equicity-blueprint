@@ -254,7 +254,8 @@ function Rate({ q, value, set, ctx }: Props) {
       }
       case 'example': {
         const ex = c.examples.find((e) => e.id === id)!;
-        const src = ctx.previews.includes(ex.id) ? `${ctx.base}api/${ctx.config.slug}/preview/${ex.id}` : ex.image ? `${ctx.base}${ex.image.replace(/^\/+/, '')}` : undefined;
+        // A screenshot set in the config is a deliberate pick, so it wins over one captured from admin.
+        const src = ex.image ? `${ctx.base}${ex.image.replace(/^\/+/, '')}` : ctx.previews.includes(ex.id) ? `${ctx.base}api/${ctx.config.slug}/preview/${ex.id}` : undefined;
         return <ExampleStage url={ex.url} name={ex.name} src={src} />;
       }
     }

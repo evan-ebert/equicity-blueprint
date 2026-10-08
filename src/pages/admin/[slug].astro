@@ -67,6 +67,7 @@ const [row, answers, uploads, events, sends] = config
   : [null, {}, [], [], []];
 const chapters = config ? buildChapters(config) : [];
 const previewIds = config ? new Set(await savedPreviewIds(env.UPLOADS, config.slug)) : new Set<string>();
+const previewReady = config ? config.examples.filter((e) => e.image || previewIds.has(e.id)).length : 0;
 const review = config ? buildReview(config, answers, uploads, chapters) : [];
 const flags = config ? buildFlags(config, answers, uploads, chapters) : [];
 // Each send compared with the one before it, newest first, plus anything changed since the last send.
@@ -144,16 +145,22 @@ const eventLabel: Record<string, string> = {
 
         {config.examples.length > 0 && (
           <section class="bp-review" aria-label="Example site previews">
-            <div class="bp-review__head"><h2 class="bp-review__title">Example site previews ({previewIds.size} of {config.examples.length})</h2></div>
+            <div class="bp-review__head"><h2 class="bp-review__title">Example site previews ({previewReady} of {config.examples.length})</h2></div>
             <p class="eq-muted" style="margin:0;font-size:15px">Saved screenshots load instantly for the client. Refresh after changing the examples in their config.</p>
             <div class="bp-previews">
               {config.examples.map((e) => (
                 <div class="bp-preview">
                   <a href={e.url} target="_blank" rel="noopener" class="bp-preview__link">
-                    {previewIds.has(e.id) ? <img src={withBase(`api/${config.slug}/preview/${e.id}?t=${Date.now()}`)} alt={`Preview of ${e.name}`} loading="lazy" /> : <span class="bp-preview__empty">Not saved yet</span>}
+                    {e.image ? (
+                      <img src={withBase(e.image)} alt={`Preview of ${e.name}`} loading="lazy" />
+                    ) : previewIds.has(e.id) ? (
+                      <img src={withBase(`api/${config.slug}/preview/${e.id}?t=${Date.now()}`)} alt={`Preview of ${e.name}`} loading="lazy" />
+                    ) : (
+                      <span class="bp-preview__empty">Not saved yet</span>
+                    )}
                     <span class="bp-preview__name">{e.name}</span>
                   </a>
-                  <div class="bp-preview__row">
+                  {e.image ? <span class="eq-field__help">Set in the config</span> : <div class="bp-preview__row">
                   <form method="post" enctype="multipart/form-data" class="bp-preview__actions">
                     <input type="hidden" name="example" value={e.id} />
                     <input type="hidden" name="action" value="preview-upload" />
@@ -168,7 +175,7 @@ const eventLabel: Record<string, string> = {
                       <button class="eq-btn eq-btn--quiet bp-preview__btn" type="submit" name="action" value="preview-remove">Remove</button>
                     </form>
                   )}
-                  </div>
+                  </div>}
                 </div>
               ))}
             </div>
