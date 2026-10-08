@@ -648,3 +648,16 @@ Deployed to Webflow Cloud from `main` (app "Equicity Blueprint", mounted at /blu
 - Ernest's exact gold is a placeholder (#B8913A) until sampled from his logo.
 - Client summary PDF, all-files zip, chapter-complete notices and the admin config builder are next week or later, per section 12 and the roadmap.
 - Sync the Webflow site color variables to the brand reference after Ernest's link goes out.
+
+## 17. October 8, 2026: live and sent
+
+Ernest's link went out on October 8 (results call Monday, October 12 at noon). Changes made after Evan's phone test:
+
+- Admin **Preview** is read only (nothing saves). Admin and Slack show the client's full name (`fullName` in config).
+- Chapter 1 shows which fields came from the current site. "Not sure yet" and "Let's talk" replace an answer instead of sitting beside it.
+- "Not for me" asks what's not working. Chapter pills fill as chapters are passed; optional questions and starting lists don't count until a chapter is started. The review says "Up next" for screens not reached.
+- Pages: "Excited" toggle, up to 7 services total (`maxServices`), extra notes box. Anything new shows a neutral "we'll talk it through" line and becomes a "Possible scope" flag.
+- Every send keeps a copy of the answers. Admin shows what changed per send and since the last one; the brief lists changes since the first send; Slack lists the flags.
+- Example-site previews are saved by the app: admin **Refresh previews** (mShots, then Microlink), or **Upload** your own, or set `image` on an example in the config for sites that block screenshot services (Brené Brown).
+- Motion: screen fades, "Chapter done" check, halfway confetti and marker, the "all set" circle draws itself. All respect reduced motion.
+- Form posts work behind Webflow's proxy (Astro's built-in origin check is off; the middleware does a proxy-aware check).
