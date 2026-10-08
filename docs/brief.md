@@ -620,3 +620,31 @@ These override anything above that conflicts.
 2. Next: an admin form that builds and validates a client config (no JSON editing).
 3. Later: a public, self-serve Blueprint a prospect can take before any call, using industry defaults instead of a config, delivering a brief to Evan. Doubles as a lead magnet on equicityseo.com.
 4. Also later: in-app voice recording with transcription, AI-drafted design direction from the answers, multiple people per client, "need help" items pushed to ClickUp.
+
+## 16. Build status, October 8, 2026 (overnight)
+
+Deployed to Webflow Cloud from `main` (app "Equicity Blueprint", mounted at /blueprint). Database tables are created by migration on deploy.
+
+### Built
+
+- Code gate (plain form, works without JavaScript), signed sign-in cookies, attempt limits, friendly errors.
+- The client app: welcome, all eight chapters, a halfway checkpoint after chapter 4, "Here's what we heard" review with Edit links, send, and the done screen ("You're all set", next steps, "Evan will send your voice memo prompts next", the timeline).
+- Galleries in the client's brand: palettes, type pairings, homepage layouts, imagery (Pexels, credited), real example sites (screenshot preview, "Open the site" in a new tab, rating, tags, notes, closest pick).
+- Saves every answer on its own, retries when offline, keeps unsaved changes on the device, and resumes on any device at the last screen.
+- Private uploads with progress and remove. Big phone photos are resized on the device; logo and cover files never are.
+- A password guard on every text box: if text looks like a login, it is not saved and the client is told to invite Evan instead.
+- Admin at /blueprint/admin: sign in, client list with progress, per-client page with link and one-time code, "Open the client view", progress by chapter, flags, files, every answer, history, brief.md download and view, answers.json. Demo answers can be cleared.
+- Slack notices (when the webhook is set): first open, and each send.
+- noindex header and meta on every response, strict security headers, no other client's config ever reaches the browser.
+
+### Before Ernest's link goes out
+
+1. Add `SESSION_SECRET`, `ADMIN_PASSWORD`, `SLACK_WEBHOOK_URL` and `PUBLIC_ORIGIN` in the Webflow Cloud environment settings.
+2. Sign in to /blueprint/admin, run through the demo client on a phone, then open Ernest's client view once (this also warms the example site previews).
+3. Create Ernest's code and send the link and code from Evan's inbox.
+
+### Still open
+
+- Ernest's exact gold is a placeholder (#B8913A) until sampled from his logo.
+- Client summary PDF, all-files zip, chapter-complete notices and the admin config builder are next week or later, per section 12 and the roadmap.
+- Sync the Webflow site color variables to the brand reference after Ernest's link goes out.
