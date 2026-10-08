@@ -112,6 +112,57 @@
       "why": "Clean and calm, with a clear path into his method and his book."
     }
   ],
+  "imagery": [
+    {
+      "id": "conversation",
+      "label": "Real conversations, not posed",
+      "src": "https://images.pexels.com/photos/9065292/pexels-photo-9065292.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "RDNE Stock project on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/9065292/"
+    },
+    {
+      "id": "outdoors",
+      "label": "Side by side, outdoors",
+      "src": "https://images.pexels.com/photos/975340/pexels-photo-975340.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "Vera Arsic on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/975340/"
+    },
+    {
+      "id": "hands",
+      "label": "Small gestures, up close",
+      "src": "https://images.pexels.com/photos/233223/pexels-photo-233223.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "Matthias Zomer on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/233223/"
+    },
+    {
+      "id": "nature",
+      "label": "Quiet Northwest nature",
+      "src": "https://images.pexels.com/photos/4827/nature-forest-trees-fog.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "Jaymantri on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/4827/"
+    },
+    {
+      "id": "spaces",
+      "label": "Calm, warm rooms",
+      "src": "https://images.pexels.com/photos/6908500/pexels-photo-6908500.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "Max Vakhtbovych on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/6908500/"
+    },
+    {
+      "id": "groups",
+      "label": "People in a group, mid-conversation",
+      "src": "https://images.pexels.com/photos/7579174/pexels-photo-7579174.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "Antoni Shkraba on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/7579174/"
+    },
+    {
+      "id": "counseling",
+      "label": "The counseling room",
+      "src": "https://images.pexels.com/photos/7176028/pexels-photo-7176028.jpeg?auto=compress&cs=tinysrgb&w=900",
+      "credit": "SHVETS production on Pexels",
+      "creditUrl": "https://www.pexels.com/photo/7176028/"
+    }
+  ],
   "services": [
     "Family Intervention",
     "Marriage Repair",

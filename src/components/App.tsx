@@ -28,6 +28,7 @@ type Step =
 type SaveState = 'idle' | 'saving' | 'saved' | 'retrying' | 'expired';
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
+const PHOTO_RESIZE_OVER = 4 * 1024 * 1024;
 const OK_EXT = /\.(png|jpe?g|webp|gif|heic|heif|svg|pdf|ai|eps)$/i;
 const BREAK_AFTER_CHAPTER = 4;
 
@@ -56,10 +57,10 @@ function writePending(slug: string, items: Map<string, AnswerValue | null>) {
 
 // ---------- images over the size limit get resized in the browser ----------
 
-async function shrinkImage(file: File): Promise<File> {
+async function shrinkImage(file: File, maxEdge: number): Promise<File> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type) || typeof createImageBitmap !== 'function') return file;
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 4000 / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
@@ -67,7 +68,7 @@ async function shrinkImage(file: File): Promise<File> {
   bitmap.close?.();
   for (const quality of [0.9, 0.8, 0.7]) {
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', quality));
-    if (blob && blob.size <= MAX_UPLOAD) return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+    if (blob && blob.size <= MAX_UPLOAD && blob.size < file.size) return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
   }
   return file;
 }
@@ -259,8 +260,13 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
     async (qid, original, onProgress) => {
       if (!OK_EXT.test(original.name) && !/^image\//.test(original.type)) throw new Error("That file type isn't supported here. Images, PDF, SVG, AI and EPS all work.");
       let file = original;
+      // Big phone photos get resized to web size on the device, so uploads finish quickly on a slow connection.
+      // Logo and cover files are never touched.
+      if (/^image\/(jpeg|webp)$/.test(file.type) && file.size > PHOTO_RESIZE_OVER && !/logo|cover/.test(qid)) {
+        file = await shrinkImage(file, 3200).catch(() => original);
+      }
       if (file.size > MAX_UPLOAD) {
-        file = await shrinkImage(file).catch(() => original);
+        file = await shrinkImage(file, 4000).catch(() => file);
         if (file.size > MAX_UPLOAD) throw new Error(`That file is over 25 MB. Try a smaller version, or text it to ${owner}.`);
       }
       const form = new FormData();

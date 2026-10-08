@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getClientConfig } from '../../../lib/config';
 import { SetupError, allowAttempt, clearAttempts, clientCookieName, clientIp, cookieOptions, startClientSession, verifyCode } from '../../../lib/auth';
 import { getClientRow, logEvent, markOpened } from '../../../lib/db';
+import { notifySlack } from '../../../lib/notify';
 import { BASE, getEnv, redirect } from '../../../lib/http';
 
 /** Plain form POST from the gate. Works without JavaScript. */
@@ -33,5 +34,6 @@ export const POST: APIRoute = async ({ params, request, locals, cookies }) => {
   await clearAttempts(env.DB, key);
   await markOpened(env.DB, slug);
   await logEvent(env.DB, slug, 'opened');
+  if (!row.first_opened_at) await notifySlack(env, `${config.firstName} (${config.business}) just opened their blueprint for the first time.`);
   return redirect(slug);
 };

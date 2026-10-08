@@ -601,7 +601,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
             id: 'files',
             title: 'Headshots, photos and anything else',
             label: 'Files',
-            help: 'Images, PDF, SVG, AI or EPS, up to 25 MB each',
+            help: 'Images, PDF, SVG, AI or EPS, up to 25 MB each. Big photos are resized for the web as they upload.',
             accept: 'image/*,.svg,.ai,.eps,.pdf,application/pdf',
             multiple: true,
             exits: true,
