@@ -1,0 +1,30 @@
+---
+import '../styles/tokens.css';
+import '../styles/components.css';
+import '../styles/app.css';
+import '@fontsource/caveat-brush/latin-400.css';
+import { BASE } from '../lib/http';
+
+interface Props {
+  title: string;
+  wide?: boolean;
+}
+const { title } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="icon" type="image/png" href={`${BASE}favicon.png`} />
+    <title>{title}</title>
+    <slot name="head" />
+  </head>
+  <body class="eq-root">
+    <slot />
+  </body>
+</html>

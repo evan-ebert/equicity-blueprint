@@ -37,7 +37,7 @@ export const POST: APIRoute = async ({ params, request, locals, cookies }) => {
 
   const id = crypto.randomUUID();
   const key = `${config.slug}/${id}/${name}`;
-  await env.UPLOADS.put(key, file.stream(), { httpMetadata: { contentType }, customMetadata: { slug: config.slug, qid, originalName: name } });
+  await env.UPLOADS.put(key, await file.arrayBuffer(), { httpMetadata: { contentType }, customMetadata: { slug: config.slug, qid, originalName: name } });
   await insertUpload(env.DB, { id, slug: config.slug, question_id: qid, r2_key: key, file_name: name, content_type: contentType, size: file.size });
   return json({ ok: true, upload: toPublicUpload({ id, slug: config.slug, question_id: qid, r2_key: key, file_name: name, content_type: contentType, size: file.size, uploaded_at: new Date().toISOString() }) });
 };

@@ -1,0 +1,105 @@
+---
+/** Evan's admin: sign in, then every client with status and progress. */
+import Base from '../../layouts/Base.astro';
+import { Icon } from '../../components/icons';
+import { getAllClientConfigs } from '../../lib/config';
+import { ADMIN_COOKIE, SetupError, hasAdminSession } from '../../lib/auth';
+import { getAnswers, listClientRows } from '../../lib/db';
+import { buildChapters, chapterProgress } from '../../lib/chapters';
+import { BASE, getEnv, withBase } from '../../lib/http';
+import { ago, statusLabel } from '../../lib/admin';
+
+const env = getEnv(Astro.locals);
+let mode: 'login' | 'list' | 'setup' = 'login';
+try {
+  mode = (await hasAdminSession(env, Astro.cookies.get(ADMIN_COOKIE)?.value)) ? 'list' : 'login';
+} catch (e) {
+  if (e instanceof SetupError) mode = 'setup';
+  else throw e;
+}
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+const messages: Record<string, string> = {
+  password: "That password didn't match.",
+  wait: 'Too many tries. Wait about 15 minutes and try again.',
+  setup: 'ADMIN_PASSWORD is missing or shorter than 10 characters. Add it in the Webflow Cloud environment settings, then redeploy.',
+};
+const e = Astro.url.searchParams.get('e') ?? '';
+
+type Item = { slug: string; name: string; first: string; status: string; passcode: boolean; done: number; total: number; last: string | null; submitted: string | null; active: boolean };
+let items: Item[] = [];
+if (mode === 'list') {
+  const rows = new Map((await listClientRows(env.DB)).map((r) => [r.slug, r]));
+  items = await Promise.all(
+    getAllClientConfigs().map(async (c) => {
+      const row = rows.get(c.slug);
+      const answers = row ? await getAnswers(env.DB, c.slug) : {};
+      const chapters = buildChapters(c);
+      return {
+        slug: c.slug,
+        name: c.business,
+        first: c.firstName,
+        status: row?.status ?? 'not-started',
+        passcode: !!row?.passcode_hash,
+        done: chapters.filter((ch) => chapterProgress(ch, answers) >= 1).length,
+        total: chapters.length,
+        last: row?.last_activity_at ?? null,
+        submitted: row?.submitted_at ?? null,
+        active: c.status === 'active',
+      };
+    }),
+  );
+}
+---
+<Base title="Blueprint admin">
+  <main class="eq-page" style="max-width:720px">
+    <img class="eq-top__logo" src={`${BASE}equicity-logo.png`} alt="Equicity" width="110" height="22" />
+    {mode === 'setup' && (
+      <>
+        <h1 class="eq-h1">Almost ready</h1>
+        <p class="bp-alert" role="alert"><Icon name="alert" size={18} /><span>SESSION_SECRET is missing or shorter than 24 characters. Add it in the Webflow Cloud environment settings, then redeploy.</span></p>
+      </>
+    )}
+    {mode === 'login' && (
+      <>
+        <header class="eq-stack">
+          <span class="eq-eyebrow" style="justify-self:start">Blueprint admin</span>
+          <h1 class="eq-h1">Sign in</h1>
+        </header>
+        {messages[e] && <p class="bp-alert" role="alert"><Icon name="alert" size={18} /><span>{messages[e]}</span></p>}
+        <form method="post" action={withBase('api/admin/login')} class="eq-stack" style="gap:14px">
+          <label class="eq-field">
+            <span class="eq-field__label">Admin password</span>
+            <input class="eq-input" type="password" name="password" required autocomplete="current-password" />
+          </label>
+          <button class="eq-btn eq-btn--primary eq-btn--block" type="submit">Sign in</button>
+        </form>
+      </>
+    )}
+    {mode === 'list' && (
+      <>
+        <header class="eq-row" style="justify-content:space-between">
+          <h1 class="eq-h1">Clients</h1>
+          <form method="post" action={withBase('api/admin/logout')}><button class="eq-btn eq-btn--quiet" type="submit">Sign out</button></form>
+        </header>
+        <ul class="bp-chapters">
+          {items.map((it) => (
+            <li>
+              <a class="bp-chapter" href={withBase(`admin/${it.slug}`)} style="text-decoration:none">
+                <span class="bp-toc__n">{it.done}</span>
+                <span class="bp-chapter__t">
+                  {it.name}{!it.active && ' (inactive)'}
+                  <span class="bp-chapter__m">
+                    {it.first} · {it.done} of {it.total} chapters · {it.passcode ? 'code set' : 'no code yet'} · {it.last ? `active ${ago(it.last)}` : 'not opened'}
+                  </span>
+                </span>
+                <span class={`eq-status${it.status === 'submitted' ? ' eq-status--done' : ''}`}>{statusLabel(it.status)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p class="eq-muted" style="margin:0;font-size:15px">To add a client, add a config file in the repo's configs folder and push. Then set their code here.</p>
+      </>
+    )}
+  </main>
+</Base>

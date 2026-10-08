@@ -1,0 +1,223 @@
+---
+/**
+ * One client: the link and code to send, progress, flags, everything they said, files, and history.
+ * Form posts to this page handle "set a code" (shown once), "open the client view" and "reset demo".
+ */
+import Base from '../../layouts/Base.astro';
+import { Icon } from '../../components/icons';
+import { getAllClientConfigs } from '../../lib/config';
+import { ADMIN_COOKIE, SetupError, clientCookieName, cookieOptions, formatCode, generateCode, hashCode, hasAdminSession, startClientSession } from '../../lib/auth';
+import { getAnswers, getClientRow, listEvents, listUploads, logEvent, resetClientData, setPasscode } from '../../lib/db';
+import { buildChapters, chapterProgress, flatQuestions } from '../../lib/chapters';
+import { buildFlags, buildReview } from '../../lib/summary';
+import { BASE, getEnv, withBase } from '../../lib/http';
+import { ago, fileSize, pacific, statusLabel } from '../../lib/admin';
+
+const env = getEnv(Astro.locals);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+let authed = false;
+try {
+  authed = await hasAdminSession(env, Astro.cookies.get(ADMIN_COOKIE)?.value);
+} catch (e) {
+  if (!(e instanceof SetupError)) throw e;
+}
+if (!authed) return Astro.redirect(withBase('admin'), 303);
+
+const config = getAllClientConfigs().find((c) => c.slug === Astro.params.slug);
+if (!config) {
+  Astro.response.status = 404;
+}
+
+let newCode: string | null = null;
+let notice: string | null = null;
+if (config && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData().catch(() => null);
+  const action = String(form?.get('action') ?? '');
+  if (action === 'passcode') {
+    const code = generateCode();
+    const h = await hashCode(code);
+    await setPasscode(env.DB, config.slug, h.hash, h.salt);
+    await logEvent(env.DB, config.slug, 'passcode-set');
+    newCode = formatCode(code);
+  } else if (action === 'preview') {
+    const s = await startClientSession(env, config.slug);
+    Astro.cookies.set(clientCookieName(config.slug), s.token, cookieOptions(BASE, s.days));
+    await logEvent(env.DB, config.slug, 'admin-preview');
+    return Astro.redirect(withBase(config.slug), 303);
+  } else if (action === 'reset' && config.slug === 'demo') {
+    const keys = await resetClientData(env.DB, config.slug);
+    if (keys.length) await env.UPLOADS.delete(keys);
+    notice = 'Demo answers, files and history cleared. The code still works.';
+  }
+}
+
+const [row, answers, uploads, events] = config
+  ? await Promise.all([getClientRow(env.DB, config.slug), getAnswers(env.DB, config.slug), listUploads(env.DB, config.slug), listEvents(env.DB, config.slug, 40)])
+  : [null, {}, [], []];
+const chapters = config ? buildChapters(config) : [];
+const review = config ? buildReview(config, answers, uploads, chapters) : [];
+const flags = config ? buildFlags(config, answers, uploads, chapters) : [];
+const questionTitle = new Map(flatQuestions(chapters).map(({ q }) => [q.id, q.label ?? q.title]));
+const origin = env.PUBLIC_ORIGIN || Astro.url.origin;
+const link = config ? `${origin}${withBase(config.slug)}` : '';
+const sendText = newCode ? `Here's your blueprint: ${link}\nYour code: ${newCode}` : '';
+const eventLabel: Record<string, string> = {
+  opened: 'Signed in',
+  'login-failed': 'Wrong code entered',
+  submitted: 'Sent their blueprint',
+  'passcode-set': 'New code set',
+  'admin-preview': 'You opened the client view',
+};
+---
+<Base title={config ? `${config.businessShort} · Blueprint admin` : 'Not found'}>
+  <main class="eq-page" style="max-width:760px">
+    <a class="eq-btn eq-btn--quiet" style="justify-self:start" href={withBase('admin')}><Icon name="back" size={18} />All clients</a>
+    {!config ? (
+      <h1 class="eq-h1">No client with that link.</h1>
+    ) : (
+      <>
+        <header class="eq-stack" style="gap:10px">
+          <span class="eq-eyebrow" style="justify-self:start">{statusLabel(row?.status ?? 'not-started')}</span>
+          <h1 class="eq-h1">{config.business}</h1>
+          <p class="eq-muted" style="margin:0">
+            {config.firstName}
+            {row?.first_opened_at && ` · first opened ${pacific(row.first_opened_at)}`}
+            {row?.last_activity_at && ` · active ${ago(row.last_activity_at)}`}
+            {row?.submitted_at && ` · sent ${pacific(row.submitted_at)}`}
+          </p>
+        </header>
+
+        {notice && <p class="bp-note"><Icon name="saved" /><span>{notice}</span></p>}
+
+        <section class="bp-review" aria-label="Send the link">
+          <div class="bp-review__head"><h2 class="bp-review__title">Link and code</h2></div>
+          <div class="eq-stack" style="gap:6px">
+            <span class="eq-field__label">Link</span>
+            <div class="eq-row" style="flex-wrap:nowrap">
+              <input class="eq-input" readonly value={link} aria-label="Client link" />
+              <button type="button" class="eq-btn eq-btn--secondary" data-copy={link}>Copy</button>
+            </div>
+          </div>
+          {newCode ? (
+            <div class="eq-stack" style="gap:8px">
+              <span class="eq-field__label">New code (shown once, so copy it now)</span>
+              <div class="eq-stat" style="justify-items:start"><span class="eq-stat__num" style="font-family:var(--font-sans);font-weight:800;letter-spacing:0.12em">{newCode}</span><span class="eq-stat__label">Any old code stops working.</span></div>
+              <button type="button" class="eq-btn eq-btn--primary" data-copy={sendText}>Copy link and code for your email</button>
+            </div>
+          ) : (
+            <form method="post" class="eq-row">
+              <input type="hidden" name="action" value="passcode" />
+              <span class="eq-muted">{row?.passcode_hash ? 'A code is set. Reset it if they lost it.' : 'No code yet.'}</span>
+              <button class="eq-btn eq-btn--secondary" type="submit">{row?.passcode_hash ? 'Reset code' : 'Create code'}</button>
+            </form>
+          )}
+          <form method="post" class="eq-row">
+            <input type="hidden" name="action" value="preview" />
+            <button class="eq-btn eq-btn--quiet" type="submit" style="padding-left:0">Open the client view <Icon name="external" size={16} /></button>
+            <span class="eq-field__help">Anything you change there saves to their answers.</span>
+          </form>
+          {config.slug === 'demo' && (
+            <form method="post" class="eq-row">
+              <input type="hidden" name="action" value="reset" />
+              <button class="eq-btn eq-btn--quiet" type="submit" style="padding-left:0">Clear demo answers</button>
+            </form>
+          )}
+        </section>
+
+        <section class="bp-review" aria-label="Progress">
+          <div class="bp-review__head"><h2 class="bp-review__title">Progress</h2></div>
+          <ol class="bp-toc">
+            {chapters.map((c) => {
+              const p = Math.round(chapterProgress(c, answers) * 100);
+              return (
+                <li>
+                  <span class="bp-toc__n">{c.n}</span>
+                  <span class="bp-toc__t">{c.title}</span>
+                  <span class="bp-toc__m">{p}%</span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section class="bp-review" aria-label="Brief">
+          <div class="bp-review__head"><h2 class="bp-review__title">Brief for your Claude project</h2></div>
+          <div class="eq-row">
+            <a class="eq-btn eq-btn--primary" href={withBase(`api/admin/${config.slug}/brief.md`)}>Download brief.md</a>
+            <a class="eq-btn eq-btn--secondary" href={withBase(`api/admin/${config.slug}/brief.md?view=1`)} target="_blank" rel="noopener">View</a>
+            <a class="eq-btn eq-btn--quiet" href={withBase(`api/admin/${config.slug}/answers.json`)}>answers.json</a>
+          </div>
+        </section>
+
+        <section class="bp-review" aria-label="Flags">
+          <div class="bp-review__head"><h2 class="bp-review__title">Flags ({flags.length})</h2></div>
+          {flags.length ? (
+            <ul style="margin:0;padding-left:20px;display:grid;gap:6px;font-size:15px;line-height:22px">{flags.map((f) => <li>{f}</li>)}</ul>
+          ) : (
+            <p class="eq-muted" style="margin:0">Nothing flagged yet.</p>
+          )}
+        </section>
+
+        <section class="bp-review" aria-label="Files">
+          <div class="bp-review__head"><h2 class="bp-review__title">Files ({uploads.length})</h2></div>
+          {uploads.length ? (
+            <div class="eq-files">
+              {uploads.map((u) => (
+                <a class="eq-file" href={withBase(`api/admin/file/${u.id}`)} style="text-decoration:none;color:inherit">
+                  <span class="eq-file__thumb"><Icon name="file" /></span>
+                  <span style="min-width:0">
+                    <span class="eq-file__name" style="display:block">{u.file_name}</span>
+                    <span class="eq-file__meta">{questionTitle.get(u.question_id) ?? u.question_id} · {fileSize(u.size)} · {pacific(u.uploaded_at)}</span>
+                  </span>
+                  <Icon name="down" />
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p class="eq-muted" style="margin:0">No files yet.</p>
+          )}
+        </section>
+
+        {review.map((s) => (
+          <section class="bp-review" aria-label={s.title}>
+            <div class="bp-review__head"><h2 class="bp-review__title">{s.title}</h2></div>
+            {s.items.length === 0 ? (
+              <p class="eq-muted" style="margin:0;font-size:15px">Nothing yet</p>
+            ) : (
+              <dl class="bp-review__list">
+                {s.items.map((it) => (
+                  <div>
+                    <dt>{it.label}</dt>
+                    <dd>{it.text}{it.exit && <span class="eq-status" style="margin-left:8px">{it.exit === 'talk' ? "Let's talk about it" : 'Not sure yet'}</span>}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </section>
+        ))}
+
+        <section class="bp-review" aria-label="History">
+          <div class="bp-review__head"><h2 class="bp-review__title">History</h2></div>
+          {events.length ? (
+            <ul style="margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:15px">
+              {events.map((ev) => <li><span class="eq-muted">{pacific(ev.created_at)}</span> {eventLabel[ev.type] ?? ev.type}</li>)}
+            </ul>
+          ) : (
+            <p class="eq-muted" style="margin:0">Nothing yet.</p>
+          )}
+        </section>
+      </>
+    )}
+  </main>
+  <script is:inline>
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-copy]');
+      if (!b) return;
+      var text = b.getAttribute('data-copy');
+      var done = function () { var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1600); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy this:', text); });
+      else window.prompt('Copy this:', text);
+    });
+  </script>
+</Base>

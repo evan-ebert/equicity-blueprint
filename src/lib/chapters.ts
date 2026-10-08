@@ -3,7 +3,7 @@
  * Shared by the browser (to render) and the server (to summarize and flag), so keep it pure.
  */
 import type { ClientConfig, CustomQuestionConfig } from './config';
-import { AccessItemIds } from './config';
+import { AccessItemIds } from './shared';
 
 export type Opt = { id: string; label: string };
 export type AnswerValue = { v: unknown; exit?: 'not-sure' | 'talk' };
@@ -259,7 +259,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
           label: `Exact ${color}`,
           options: [o("I'll paste the color code", 'paste'), o(`Use the ${color} from my logo`, 'logo'), o('Not sure, you pick', 'you-pick')],
         },
-        { type: 'short', id: 'color-code', title: 'Your color code', label: 'Color code', placeholder: 'For example #B8913A', showIf: (a) => picked(a, 'exact-color', 'paste') },
+        { type: 'short', id: 'color-code', title: 'Your color code', label: 'Color code', placeholder: 'It starts with #, like #4A7C59', showIf: (a) => picked(a, 'exact-color', 'paste') },
         { type: 'extra', id: 'color-extra', title: 'Love a color combo we didn\'t show?', label: 'Colors we missed', placeholder: 'Describe it, or paste a link' },
       ],
     },

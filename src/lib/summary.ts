@@ -3,7 +3,7 @@
  * for Evan's Claude project, and the rule-based flags. Shared by browser and server.
  */
 import type { ClientConfig } from './config';
-import { resolvePalette } from './config';
+import { resolvePalette } from './shared';
 import { buildChapters, isAnswerable, isVisible, LAYOUTS, TYPE_PAIRINGS, type Answers, type Chapter, type Question } from './chapters';
 
 export type UploadInfo = { id: string; question_id: string; file_name: string; size: number; content_type: string };
@@ -187,7 +187,7 @@ export function buildFlags(c: ClientConfig, answers: Answers, uploads: UploadInf
   if (choice(answers, 'lead-flow') && choice(answers, 'lead-flow') !== c.leadFlowRecommendation && choice(answers, 'lead-flow') !== 'talk') add('Lead flow: picked something other than the recommendation. Confirm on the call.');
   const intake = val(answers, 'intake');
   const intakeCount = (intake?.picks?.length ?? 0) + (intake?.other ? 1 : 0);
-  if (intake && (intakeCount < 3 || intakeCount > 5)) add(`Intake form: ${intakeCount} fields picked (target 3 to 5).`);
+  if (intake && (intakeCount < 3 || intakeCount > 5)) add(`Intake form: ${intakeCount} field${intakeCount === 1 ? '' : 's'} picked (target 3 to 5).`);
   if (val(answers, 'weighs-in')?.choice === 'one-other') add(`Another decision maker weighs in: ${val(answers, 'weighs-in-who') || 'name not given'}. Include them in reviews.`);
 
   // Exits and skipped chapters become the call agenda.

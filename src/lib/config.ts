@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { AccessItemIds, resolvePalette } from './shared';
+
+export { AccessItemIds, resolvePalette };
 
 /**
  * One JSON file per client in /configs. Adding a client is a new file plus a passcode set in admin.
@@ -43,8 +46,6 @@ const ImageryTile = z.object({
   credit: z.string(),
   creditUrl: z.string().url(),
 });
-
-export const AccessItemIds = ['wordpress', 'host', 'registrar', 'email', 'gbp', 'gsc-ga', 'calendly', 'youtube'] as const;
 
 export const ClientConfigSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/),
@@ -148,12 +149,6 @@ export function getClientConfig(slug: string): ClientConfig | null {
 
 export function getAllClientConfigs(): ClientConfig[] {
   return Object.values(parsed).sort((a, b) => a.business.localeCompare(b.business));
-}
-
-/** Resolve {primary} in a palette to the client's brand primary. */
-export function resolvePalette(p: PaletteConfig, primary: string): PaletteConfig {
-  const r = (v: string) => (v === '{primary}' ? primary : v);
-  return { ...p, bg: r(p.bg), text: r(p.text), accent: r(p.accent), accentText: r(p.accentText), onAccent: r(p.onAccent), band: r(p.band), bandInk: r(p.bandInk) };
 }
 
 /** The slice of config the browser needs. Nothing secret lives in configs, but keep the payload lean. */

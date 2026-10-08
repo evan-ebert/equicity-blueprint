@@ -130,3 +130,15 @@ export async function insertUpload(db: D1Database, u: Omit<UploadRow, 'uploaded_
 export async function deleteUploadRow(db: D1Database, id: string) {
   await db.prepare('DELETE FROM uploads WHERE id = ?').bind(id).run();
 }
+
+/** Wipe a client's answers, uploads and history but keep their passcode. Used for the demo client only. */
+export async function resetClientData(db: D1Database, slug: string): Promise<string[]> {
+  const keys = (await listUploads(db, slug)).map((u) => u.r2_key);
+  await db.batch([
+    db.prepare('DELETE FROM answers WHERE slug = ?').bind(slug),
+    db.prepare('DELETE FROM uploads WHERE slug = ?').bind(slug),
+    db.prepare('DELETE FROM events WHERE slug = ?').bind(slug),
+    db.prepare(`UPDATE clients SET status = 'not-started', first_opened_at = NULL, last_activity_at = NULL, submitted_at = NULL WHERE slug = ?`).bind(slug),
+  ]);
+  return keys;
+}
