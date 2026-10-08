@@ -138,7 +138,29 @@ export async function resetClientData(db: D1Database, slug: string): Promise<str
     db.prepare('DELETE FROM answers WHERE slug = ?').bind(slug),
     db.prepare('DELETE FROM uploads WHERE slug = ?').bind(slug),
     db.prepare('DELETE FROM events WHERE slug = ?').bind(slug),
+    db.prepare('DELETE FROM submissions WHERE slug = ?').bind(slug),
     db.prepare(`UPDATE clients SET status = 'not-started', first_opened_at = NULL, last_activity_at = NULL, submitted_at = NULL WHERE slug = ?`).bind(slug),
   ]);
   return keys;
+}
+
+export type Submission = { id: number; created_at: string; answers: Answers };
+
+/** Keep a copy of the answers as they were at the moment the client tapped Send. */
+export async function addSubmission(db: D1Database, slug: string, answers: Answers) {
+  await db.prepare('INSERT INTO submissions (slug, answers) VALUES (?, ?)').bind(slug, JSON.stringify(answers)).run();
+}
+
+/** Every send for a client, oldest first. */
+export async function listSubmissions(db: D1Database, slug: string): Promise<Submission[]> {
+  const r = await db.prepare('SELECT id, answers, created_at FROM submissions WHERE slug = ? ORDER BY id').bind(slug).all<{ id: number; answers: string; created_at: string }>();
+  return (r.results ?? []).map((x) => {
+    let answers: Answers = {};
+    try {
+      answers = JSON.parse(x.answers) as Answers;
+    } catch {
+      /* keep the row, show it as empty */
+    }
+    return { id: x.id, created_at: x.created_at, answers };
+  });
 }

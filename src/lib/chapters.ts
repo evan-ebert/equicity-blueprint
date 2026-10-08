@@ -20,6 +20,8 @@ export type AccessItemDef = {
   steps: string[];
   detail?: { kind: 'short'; label: string; placeholder?: string } | { kind: 'tap'; label: string; options: Opt[] };
   statuses: Opt[];
+  /** Info-only items: marked done as soon as the detail is filled in, so there's no "Done" button to tap. */
+  autoDone?: boolean;
 };
 
 type Base = {
@@ -33,6 +35,8 @@ type Base = {
   showIf?: (a: Answers) => boolean;
   /** Short label used in the review screen and brief. */
   label?: string;
+  /** Optional questions don't count toward progress. */
+  optional?: boolean;
 };
 
 export type Question =
@@ -42,10 +46,10 @@ export type Question =
   | (Base & { type: 'rate'; gallery: 'palette' | 'type' | 'layout' | 'imagery' | 'example'; items: Opt[]; tags?: Opt[] })
   | (Base & { type: 'sliders'; sliders: { id: string; left: string; right: string }[] })
   | (Base & { type: 'rank'; items: Opt[] })
-  | (Base & { type: 'short'; placeholder?: string; multiline?: boolean; inputType?: 'text' | 'url' | 'email' | 'date' })
+  | (Base & { type: 'short'; placeholder?: string; multiline?: boolean; inputType?: 'text' | 'url' | 'email' | 'date' | 'tel'; note?: string })
   | (Base & { type: 'upload'; accept: string; help: string; multiple: boolean })
   | (Base & { type: 'repeat'; fields: RepeatField[]; addLabel: string; itemLabel: string; max: number })
-  | (Base & { type: 'pages'; pages: { id: string; name: string; group: 'core' | 'services' | 'work' }[] })
+  | (Base & { type: 'pages'; pages: { id: string; name: string; group: 'core' | 'services' | 'work' }[]; maxAddedServices: number; addedNote: string })
   | (Base & { type: 'access'; items: AccessItemDef[] })
   | (Base & { type: 'agree'; points: string[]; agreeLabel: string })
   | (Base & { type: 'timeline'; items: { label: string; when: string }[] })
@@ -96,7 +100,7 @@ const pickedAny = (a: Answers, id: string, opts: string[]) => opts.some((x) => p
 
 function accessItems(c: ClientConfig): AccessItemDef[] {
   const email = c.accessEmail;
-  const standard: Opt[] = [o('Done'), o("I'll do it this week", 'week'), o('Need help'), o("Don't have this", 'none')];
+  const standard: Opt[] = [o('Invite sent', 'done'), o("I'll do it this week", 'week'), o('Need help'), o("Don't have this", 'none')];
   const all: Record<(typeof AccessItemIds)[number], AccessItemDef> = {
     wordpress: {
       id: 'wordpress',
@@ -109,21 +113,24 @@ function accessItems(c: ClientConfig): AccessItemDef[] {
       title: 'Your current web host',
       steps: ['Just tell us who hosts the site today. No login needed.'],
       detail: { kind: 'short', label: 'Who is your host?', placeholder: 'For example GoDaddy, Bluehost, SiteGround' },
-      statuses: [o('Done'), o('Not sure', 'none')],
+      statuses: [o('Added', 'done'), o('Not sure', 'none')],
+      autoDone: true,
     },
     registrar: {
       id: 'registrar',
       title: `Your domain, ${c.domain}`,
       steps: ['Tell us where the domain is registered.', 'When we launch, we will either send a delegate access invite to your account or do a 10 minute screen share together.'],
       detail: { kind: 'tap', label: 'Where is it registered?', options: [o('GoDaddy'), o('Namecheap'), o('Squarespace'), o('Other'), o('Not sure')] },
-      statuses: [o('Done'), o('Need help'), o('Not sure', 'none')],
+      statuses: [o('Added', 'done'), o('Need help')],
+      autoDone: true,
     },
     email: {
       id: 'email',
       title: 'Your email',
       steps: ['Where your email lives keeps it working when we switch the site over.'],
-      detail: { kind: 'tap', label: 'Where does your email live?', options: [o('Google Workspace'), o('Microsoft 365'), o('Through my web host', 'web-host'), o('Not sure')] },
-      statuses: [o('Done'), o('Need help')],
+      detail: { kind: 'tap', label: 'Where does your email live?', options: [o('Google Workspace'), o('Microsoft 365'), o('Through my web host', 'web-host'), o('Other'), o('Not sure')] },
+      statuses: [o('Added', 'done'), o('Need help')],
+      autoDone: true,
     },
     gbp: {
       id: 'gbp',
@@ -134,7 +141,7 @@ function accessItems(c: ClientConfig): AccessItemDef[] {
     'gsc-ga': {
       id: 'gsc-ga',
       title: 'Search Console and Analytics',
-      steps: [`In Search Console, open Settings, then Users and permissions, and add ${email} as Full.`, `In Google Analytics, open Admin, then Property access management, and add ${email} as an Editor.`, 'No accounts yet? Pick "Don\'t have this" and we will set them up new.'],
+      steps: [`In Search Console, open Settings, then Users and permissions, and add ${email} as Full.`, `In Google Analytics, open Admin, then Property access management, and add ${email} as an Editor.`, 'No accounts yet? Pick "Don\'t have this" and we\'ll sort it out together.'],
       statuses: standard,
     },
     calendly: {
@@ -142,14 +149,16 @@ function accessItems(c: ClientConfig): AccessItemDef[] {
       title: 'Calendly',
       steps: ['Paste the links to the event types you use, or add us to your Calendly team if you have one.'],
       detail: { kind: 'short', label: 'Your Calendly links', placeholder: 'https://calendly.com/...' },
-      statuses: standard,
+      statuses: [o('Added', 'done'), o('Need help'), o("Don't have this", 'none')],
+      autoDone: true,
     },
     youtube: {
       id: 'youtube',
       title: 'YouTube',
       steps: ['Just the link to your channel. No access needed.'],
       detail: { kind: 'short', label: 'Channel link', placeholder: 'https://youtube.com/@...' },
-      statuses: [o('Done'), o("Don't have this", 'none')],
+      statuses: [o('Added', 'done'), o("Don't have this", 'none')],
+      autoDone: true,
     },
   };
   return c.accessItems.map((id) => all[id]);
@@ -172,7 +181,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
         id: 'basics',
         eyebrow: 'What we already know',
         title: 'Does this look right?',
-        lead: 'Tap any line to fix it. These go on the site as written.',
+        lead: "We filled these in from your current site, so you don't have to type them. Fix anything that's off. They go on the site as written.",
         questions: [
           {
             type: 'confirm',
@@ -188,6 +197,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
             ],
           },
           { type: 'tap', id: 'show-phone', title: 'Show a phone number on the site?', label: 'Phone on the site', options: [o('Yes'), o('No')], exits: true },
+          { type: 'short', id: 'phone', title: 'Which number?', label: 'Phone number', inputType: 'tel', placeholder: c.prefill.phone ?? '(206) 555-0123', showIf: (a) => picked(a, 'show-phone', 'yes') },
           ...(c.workModes.length ? [{ type: 'multi', id: 'work-modes', title: c.workModesPrompt, label: 'Where you work', options: c.workModes.map((l) => o(l)) } as Question] : []),
           {
             type: 'multi',
@@ -232,8 +242,8 @@ export function buildChapters(c: ClientConfig): Chapter[] {
           },
           { type: 'rank', id: 'audiences', title: 'Who should the site speak to first?', label: 'Who it speaks to first', hint: 'Drag to reorder, or use the arrows', items: c.audiences.map((l) => o(l)), exits: true },
           ...c.custom.feel.map(customToQuestion),
-          { type: 'short', id: 'words-like', title: 'Words that feel like you', label: 'Words that feel like them', hint: 'Optional', placeholder: 'Steady, honest, warm' },
-          { type: 'short', id: 'words-avoid', title: 'Words to avoid', label: 'Words to avoid', hint: 'Optional', placeholder: 'Anything that feels off' },
+          { type: 'short', id: 'words-like', title: 'Words that feel like you', label: 'Words that feel like them', hint: 'Optional', placeholder: 'Steady, honest, warm', optional: true },
+          { type: 'short', id: 'words-avoid', title: 'Words to avoid', label: 'Words to avoid', hint: 'Optional', placeholder: 'Anything that feels off', optional: true },
           { type: 'tap', id: 'weighs-in', title: 'Who else weighs in on the site?', label: 'Who weighs in', options: [o('Just me'), o('Me and one other person', 'one-other')] },
           { type: 'short', id: 'weighs-in-who', title: 'Their name and role', label: 'Other decision maker', placeholder: 'For example, my wife, co-owner', showIf: (a) => picked(a, 'weighs-in', 'one-other') },
           { type: 'extra', id: 'feel-extra', title: 'Love a feeling we didn\'t name?', label: 'Feelings we missed', placeholder: 'A word, a phrase, or a site that feels right' },
@@ -259,7 +269,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
           label: `Exact ${color}`,
           options: [o("I'll paste the color code", 'paste'), o(`Use the ${color} from my logo`, 'logo'), o('Not sure, you pick', 'you-pick')],
         },
-        { type: 'short', id: 'color-code', title: 'Your color code', label: 'Color code', placeholder: 'It starts with #, like #4A7C59', showIf: (a) => picked(a, 'exact-color', 'paste') },
+        { type: 'short', id: 'color-code', title: 'Your color code', label: 'Color code', placeholder: 'It starts with #, like #4A7C59', optional: true, showIf: (a) => picked(a, 'exact-color', 'paste') },
         { type: 'extra', id: 'color-extra', title: 'Love a color combo we didn\'t show?', label: 'Colors we missed', placeholder: 'Describe it, or paste a link' },
       ],
     },
@@ -331,6 +341,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
       title: 'Any sites you love?',
       label: 'Sites they love',
       hint: 'Optional. Up to 3, from any industry.',
+      optional: true,
       addLabel: 'Add a site',
       itemLabel: 'Site',
       max: 3,
@@ -346,6 +357,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
       title: 'One site you don\'t like?',
       label: 'Site they dislike',
       hint: 'Optional, but it helps a lot.',
+      optional: true,
       addLabel: 'Add a site',
       itemLabel: 'Site',
       max: 1,
@@ -355,7 +367,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
         { id: 'note', label: 'Anything else? (optional)', kind: 'text' },
       ],
     },
-    { type: 'short', id: 'peer-site', title: 'Anyone in your field whose site gets it right?', label: 'Peer site', hint: 'Optional', placeholder: 'A name or a link' },
+    { type: 'short', id: 'peer-site', title: 'Anyone in your field whose site gets it right?', label: 'Peer site', hint: 'Optional', placeholder: 'A name or a link', optional: true },
   );
   chapters.push({
     id: 'real',
@@ -406,7 +418,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
     { type: 'rank', id: 'service-growth', title: 'Rank your services by what you most want to grow', label: 'Services to grow', items: c.services.map((l) => o(l)) },
     { type: 'multi', id: 'best-fit-services', title: 'Which bring your best-fit clients?', label: 'Best-fit services', options: c.services.map((l) => o(l)) },
     { type: 'multi', id: 'featured-services', title: 'Which should be on the homepage?', label: 'Homepage services', hint: 'Pick up to 3', max: 3, options: c.services.map((l) => o(l)) },
-    { type: 'short', id: 'service-renames', title: 'Any service name you\'d change?', label: 'Service renames', hint: 'Optional' },
+    { type: 'short', id: 'service-renames', title: 'Any service name you\'d change?', label: 'Service renames', hint: 'Optional', optional: true },
     {
       type: 'tap',
       id: 'prices',
@@ -473,10 +485,19 @@ export function buildChapters(c: ClientConfig): Chapter[] {
         id: 'pages',
         eyebrow: 'Your pages',
         title: "Here's what we're building",
-        lead: 'Star the pages you\'re most excited about, and tell me anything a page should do or include.',
+        lead: "Tap \"Excited\" on the pages you're most looking forward to, and add a note to any page about what it should do or include.",
         why: c.modules.groups || c.modules.book || c.modules.app ? 'Groups, the book and the app can each start as a "coming soon" version, so nothing has to be finished by launch.' : undefined,
         questions: [
-          { type: 'pages', id: 'pages', title: 'Your pages', label: 'Pages', pages: c.pages },
+          {
+            type: 'pages',
+            id: 'pages',
+            title: 'Your pages',
+            label: 'Pages',
+            hint: "We'll give the ones you're excited about extra care.",
+            pages: c.pages,
+            maxAddedServices: Math.max(0, c.maxServices - c.pages.filter((p) => p.group === 'services').length),
+            addedNote: "Love it. We'll talk through the best way to fit it in on our call.",
+          },
           {
             type: 'multi',
             id: 'feature-wishes',
@@ -484,8 +505,10 @@ export function buildChapters(c: ClientConfig): Chapter[] {
             label: 'Wishes beyond the agreed pages',
             options: (c.featureWishOptions ?? ['FAQ', 'Resources or downloads', 'Video', 'Newsletter signup', 'Photo gallery']).map((l) => o(l)),
             other: true,
-            anyNote: "Love it. We'll talk through the best way to fit it in.",
+            optional: true,
+            anyNote: "Love it. We'll talk through the best way to fit it in on our call.",
           },
+          { type: 'short', id: 'pages-extra', title: 'Anything else about your pages?', label: 'More about pages', hint: 'Optional', multiline: true, optional: true, note: "Thanks. Anything new here, we'll talk through together before it's added." },
         ],
       },
       { id: 'offers', eyebrow: 'Your offers', title: 'Your services and offers', questions: offerQuestions },
@@ -494,7 +517,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
 
   // 6. Getting the right people to reach out
   const proof: Question[] = [
-    { type: 'short', id: 'credentials-extra', title: `Credentials: ${c.prefill.credentials.join(', ') || 'none listed yet'}. Anything to add?`, label: 'More credentials', hint: 'Optional' },
+    { type: 'short', id: 'credentials-extra', title: `Credentials: ${c.prefill.credentials.join(', ') || 'none listed yet'}. Anything to add?`, label: 'More credentials', hint: 'Optional', optional: true },
   ];
   if (c.modules.partner && c.partnerName) {
     const yn = [o('Yes'), o('No'), o('Need to ask them', 'ask')];
@@ -511,6 +534,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
       title: 'Testimonials',
       label: 'Testimonials',
       hint: 'Nothing goes on the site without permission.',
+      optional: true,
       addLabel: 'Add a testimonial',
       itemLabel: 'Testimonial',
       max: 8,
@@ -528,7 +552,8 @@ export function buildChapters(c: ClientConfig): Chapter[] {
       id: 'podcasts',
       title: 'Podcast appearances',
       label: 'Podcasts',
-      hint: 'Star up to three to feature.',
+      hint: 'Tick up to three to feature.',
+      optional: true,
       addLabel: 'Add a podcast',
       itemLabel: 'Podcast',
       max: 12,
@@ -539,7 +564,7 @@ export function buildChapters(c: ClientConfig): Chapter[] {
       ],
     });
   }
-  proof.push({ type: 'short', id: 'profiles', title: 'Other profiles to link to', label: 'Other profiles', hint: 'Optional. LinkedIn, Instagram, Psychology Today, anything.', multiline: true });
+  proof.push({ type: 'short', id: 'profiles', title: 'Other profiles to link to', label: 'Other profiles', hint: 'Optional. LinkedIn, Instagram, Psychology Today, anything.', multiline: true, optional: true });
   proof.push(...c.custom.proof.map(customToQuestion));
 
   const leadOptions: Opt[] = [o('A free 15 minute call first, a paid session second', 'free-call-first'), o('Book a paid session right away', 'paid-first'), o("Not sure, let's talk", 'talk')];
@@ -572,8 +597,9 @@ export function buildChapters(c: ClientConfig): Chapter[] {
             hint: "Real inquiries have landed in spam before, so we'll set this up and test it before launch.",
             options: [o('A new dedicated address', 'new-address'), o('A label in my current inbox', 'label'), o('Not sure')],
           },
+          { type: 'short', id: 'inbox-address', title: 'What should the new address be?', label: 'New inbox address', placeholder: `For example hello@${c.domain}`, hint: "Not sure? Leave it blank and we'll suggest one.", inputType: 'email', optional: true, showIf: (a) => picked(a, 'inbox', 'new-address') },
           { type: 'tap', id: 'who-replies', title: 'Who replies?', label: 'Who replies', options: [o('Me'), o('Someone else', 'someone')] },
-          { type: 'short', id: 'who-replies-name', title: 'Who is it?', label: 'Replier', showIf: (a) => picked(a, 'who-replies', 'someone') },
+          { type: 'short', id: 'who-replies-name', title: 'Who is it?', label: 'Replier', placeholder: 'Their name and role', showIf: (a) => picked(a, 'who-replies', 'someone') },
           { type: 'tap', id: 'reply-speed', title: 'How fast do you usually reply?', label: 'Reply speed', options: [o('Same day'), o('Within 1 business day', '1-day'), o('Within 2 business days', '2-days'), o('It varies')] },
           { type: 'tap', id: 'calendly', title: 'Your Calendly plan', label: 'Calendly', hint: 'Paid tools pass through at cost, and only with your OK first.', options: [o('Free'), o('Paid'), o('Not sure'), o("I don't use Calendly", 'none')] },
           { type: 'tap', id: 'stripe', title: 'Is Stripe connected for payments?', label: 'Stripe', options: [o('Yes'), o('No'), o('Not sure')] },
@@ -631,15 +657,17 @@ export function buildChapters(c: ClientConfig): Chapter[] {
             title: 'How reviews work',
             label: 'Review process',
             points: [
+              'Your reactions shape the homepage direction before anything gets built.',
+              'Then two full review rounds, each one covering the whole site.',
+              'A round is one batch of feedback, so send it all together when you can. A voice memo is perfect.',
+              'Quick fixes like a typo or swapping a photo never count as a round.',
               'Feedback within five business days keeps launch on track.',
-              'A round is one batch of feedback per review, so send it all together when you can. A voice memo is perfect.',
-              'Two rounds are included.',
             ],
             agreeLabel: 'Sounds good',
           },
           { type: 'multi', id: 'reach-by', title: 'Best way to reach you', label: 'Reach by', options: [o('Text'), o('Email'), o('Voice memo'), o('Call')] },
           { type: 'short', id: 'best-times', title: 'Best times', label: 'Best times', placeholder: 'For example, weekday mornings' },
-          { type: 'short', id: 'plan-around', title: 'Anything in the next eight weeks we should plan around?', label: 'Plan around', hint: 'Optional', multiline: true },
+          { type: 'short', id: 'plan-around', title: 'Anything in the next eight weeks we should plan around?', label: 'Plan around', hint: 'Optional', multiline: true, optional: true },
         ],
       },
     ],
@@ -664,8 +692,19 @@ export function isVisible(q: Question, a: Answers) {
   return !q.showIf || q.showIf(a);
 }
 
+/** Optional questions never count against progress. */
+export function isOptional(q: Question) {
+  return !!q.optional || q.type === 'extra';
+}
+
+/** Screens the client has moved past, saved as `_visited`. */
+export function visitedScreens(a: Answers): Set<string> {
+  const v = a._visited?.v;
+  return new Set(Array.isArray(v) ? (v as string[]) : []);
+}
+
 export function hasAnswer(q: Question, a: AnswerValue | undefined): boolean {
-  if (!a) return false;
+  if (!a) return q.type === 'multi' && !!q.defaultAll;
   if (a.exit) return true;
   const v = a.v as any;
   if (v === undefined || v === null || v === '') return false;
@@ -688,9 +727,17 @@ export function hasAnswer(q: Question, a: AnswerValue | undefined): boolean {
   }
 }
 
+/** Share of the required questions answered (optional ones don't count). */
+export function answeredShare(chapter: Chapter, answers: Answers): number {
+  const qs = chapter.screens.flatMap((s) => s.questions).filter((q) => isAnswerable(q) && !isOptional(q) && isVisible(q, answers));
+  if (!qs.length) return 0;
+  return qs.filter((q) => hasAnswer(q, answers[q.id])).length / qs.length;
+}
+
+/** Progress for the chapter pills: full once every screen has been passed or every required question answered. */
 export function chapterProgress(chapter: Chapter, answers: Answers): number {
-  const qs = chapter.screens.flatMap((s) => s.questions).filter((q) => isAnswerable(q) && isVisible(q, answers));
-  if (!qs.length) return answers[`_seen:${chapter.id}`] ? 1 : 0;
-  const done = qs.filter((q) => hasAnswer(q, answers[q.id])).length;
-  return done / qs.length;
+  const screens = chapter.screens.filter((s) => s.kind !== 'welcome');
+  const visited = visitedScreens(answers);
+  const passed = screens.length ? screens.filter((s) => visited.has(`${chapter.id}/${s.id}`)).length / screens.length : 0;
+  return Math.max(passed, answeredShare(chapter, answers));
 }

@@ -4,11 +4,11 @@
  */
 import type { ClientConfig } from './config';
 import { resolvePalette } from './shared';
-import { buildChapters, isAnswerable, isVisible, LAYOUTS, TYPE_PAIRINGS, type Answers, type Chapter, type Question } from './chapters';
+import { buildChapters, isAnswerable, isVisible, LAYOUTS, TYPE_PAIRINGS, visitedScreens, type Answers, type Chapter, type Question } from './chapters';
 
 export type UploadInfo = { id: string; question_id: string; file_name: string; size: number; content_type: string };
 export type ReviewItem = { qid: string; label: string; text: string; exit?: 'not-sure' | 'talk' };
-export type ReviewSection = { chapterId: string; chapterN: number; screenId: string; title: string; items: ReviewItem[] };
+export type ReviewSection = { chapterId: string; chapterN: number; screenId: string; title: string; items: ReviewItem[]; visited: boolean };
 
 const EXIT_TEXT = { 'not-sure': 'Not sure yet', talk: "Let's talk about it" } as const;
 
@@ -44,6 +44,7 @@ export function summarize(q: Question, raw: unknown, c: ClientConfig, uploads: U
       return v.other ? `${label} (${v.other})` : label;
     }
     case 'multi': {
+      if (v == null && q.defaultAll) return `${list(q.options.map((o) => o.label))} (the starting list, unchanged)`;
       const picks: string[] = (v?.picks ?? []).map((id: string) => optLabel(q, id));
       if (v?.other) picks.push(`"${v.other}"`);
       return picks.length ? list(picks) : null;
@@ -53,14 +54,15 @@ export function summarize(q: Question, raw: unknown, c: ClientConfig, uploads: U
       if (!entries.length) return null;
       const name = (id: string) => q.items.find((i) => i.id === id)?.label ?? id;
       const by = (r: string) => entries.filter(([, x]) => x.r === r);
-      const fmt = ([id, x]: [string, { note?: string; tags?: string[] }]) => {
-        const extras = [x.tags?.length ? `likes the ${list(x.tags.map((t) => t.toLowerCase()))}` : '', x.note ? `"${x.note}"` : ''].filter(Boolean);
+      const fmt = ([id, x]: [string, { r?: string; note?: string; tags?: string[] }]) => {
+        const verb = x.r === 'no' ? 'not the' : 'likes the';
+        const extras = [x.tags?.length ? `${verb} ${list(x.tags.map((t) => t.toLowerCase()))}` : '', x.note ? `"${x.note}"` : ''].filter(Boolean);
         return extras.length ? `${name(id)} (${extras.join('; ')})` : name(id);
       };
       const parts = [];
       if (by('love').length) parts.push(`Loves: ${by('love').map(fmt).join(', ')}`);
       if (by('maybe').length) parts.push(`Maybe: ${by('maybe').map(fmt).join(', ')}`);
-      if (by('no').length) parts.push(`Not for them: ${by('no').map(([id]) => name(id)).join(', ')}`);
+      if (by('no').length) parts.push(`Not for them: ${by('no').map(fmt).join(', ')}`);
       return parts.join('. ') + '.';
     }
     case 'sliders': {
@@ -83,7 +85,9 @@ export function summarize(q: Question, raw: unknown, c: ClientConfig, uploads: U
       return files.length ? `${files.length} file${files.length > 1 ? 's' : ''}: ${files.map((f) => f.file_name).join(', ')}` : null;
     }
     case 'repeat': {
-      const rows: Record<string, unknown>[] = Array.isArray(v) ? v : [];
+      const rows: Record<string, unknown>[] = (Array.isArray(v) ? v : []).filter((row: Record<string, unknown>) =>
+        Object.values(row ?? {}).some((x) => x !== undefined && x !== null && x !== '' && x !== false && !(Array.isArray(x) && !x.length)),
+      );
       if (!rows.length) return null;
       return rows
         .map((row, i) => {
@@ -104,23 +108,27 @@ export function summarize(q: Question, raw: unknown, c: ClientConfig, uploads: U
     case 'pages': {
       const starred: string[] = v?.starred ?? [];
       const notes: Record<string, string> = v?.notes ?? {};
+      const added: { name?: string; note?: string; excited?: boolean }[] = (v?.added ?? []).filter((x: { name?: string }) => x?.name?.trim());
       const name = (id: string) => q.pages.find((p) => p.id === id)?.name ?? id;
       const parts = [];
-      if (starred.length) parts.push(`Most excited about: ${list(starred.map(name))}`);
+      const excited = [...starred.map(name), ...added.filter((x) => x.excited).map((x) => x.name!)];
+      if (excited.length) parts.push(`Most excited about: ${list(excited)}`);
       const noted = Object.entries(notes).filter(([, t]) => t?.trim());
       if (noted.length) parts.push(noted.map(([id, t]) => `${name(id)}: "${t}"`).join('; '));
+      if (added.length) parts.push(`Services they added: ${added.map((x) => (x.note?.trim() ? `${x.name} ("${x.note}")` : x.name)).join(', ')}`);
       return parts.length ? parts.join('. ') : null;
     }
     case 'access': {
       const entries = Object.entries(v ?? {}) as [string, { status?: string; detail?: string }][];
       if (!entries.length) return null;
-      return entries
+      return (entries as [string, { status?: string; detail?: string; other?: string }][])
         .map(([id, x]) => {
           const item = q.items.find((i) => i.id === id);
           if (!item) return '';
           const status = item.statuses.find((s) => s.id === x.status)?.label ?? 'no status yet';
           let detail = x.detail ?? '';
           if (detail && item.detail?.kind === 'tap') detail = item.detail.options.find((o) => o.id === detail)?.label ?? detail;
+          if (x.detail === 'other' && x.other?.trim()) detail = x.other.trim();
           return `${item.title}: ${status}${detail ? ` (${detail})` : ''}`;
         })
         .filter(Boolean)
@@ -135,6 +143,7 @@ export function summarize(q: Question, raw: unknown, c: ClientConfig, uploads: U
 
 export function buildReview(c: ClientConfig, answers: Answers, uploads: UploadInfo[] = [], chapters: Chapter[] = buildChapters(c)): ReviewSection[] {
   const sections: ReviewSection[] = [];
+  const visited = visitedScreens(answers);
   for (const ch of chapters) {
     for (const s of ch.screens) {
       if (s.kind === 'welcome') continue;
@@ -142,10 +151,10 @@ export function buildReview(c: ClientConfig, answers: Answers, uploads: UploadIn
       for (const q of s.questions) {
         if (!isAnswerable(q) || !isVisible(q, answers)) continue;
         const a = answers[q.id];
-        const text = a ? summarize(q, a.v, c, uploads) : q.type === 'upload' ? summarize(q, null, c, uploads) : null;
+        const text = a ? summarize(q, a.v, c, uploads) : q.type === 'upload' || q.type === 'extra' || (q.type === 'multi' && q.defaultAll) ? summarize(q, null, c, uploads) : null;
         if (text || a?.exit) items.push({ qid: q.id, label: q.label ?? q.title, text: text ?? '', exit: a?.exit });
       }
-      sections.push({ chapterId: ch.id, chapterN: ch.n, screenId: s.id, title: s.eyebrow && s.eyebrow !== s.title ? `${ch.title}: ${s.eyebrow}` : ch.title, items });
+      sections.push({ chapterId: ch.id, chapterN: ch.n, screenId: s.id, title: s.eyebrow && s.eyebrow !== s.title ? `${ch.title}: ${s.eyebrow}` : ch.title, items, visited: visited.has(`${ch.id}/${s.id}`) });
     }
   }
   return sections;
@@ -158,18 +167,21 @@ export function buildFlags(c: ClientConfig, answers: Answers, uploads: UploadInf
   const flags: string[] = [];
   const add = (s: string) => flags.push(s);
 
-  if (choice(answers, 'logo-plan') === 'new') add('Logo: wants something new. Scope conversation, quoted separately.');
+  if (choice(answers, 'logo-plan') === 'new') add('Possible scope: wants a new logo. Scope conversation, quoted separately.');
   if (choice(answers, 'calendly') === 'paid') add('Calendly paid tier: pass-through cost, needs approval.');
   if (choice(answers, 'stripe') === 'no' || choice(answers, 'stripe') === 'not-sure') add('Stripe not confirmed: needed if the welcome session takes payment.');
   const testimonials: any[] = val(answers, 'testimonials') ?? [];
-  const noPermission = testimonials.filter((t) => t && !t.permission).length;
+  const noPermission = testimonials.filter((t) => t && String(t.quote ?? '').trim() && !t.permission).length;
   if (noPermission) add(`${noPermission} testimonial${noPermission > 1 ? 's' : ''} without permission confirmed: do not build around ${noPermission > 1 ? 'them' : 'it'}.`);
   const access = (val(answers, 'access') ?? {}) as Record<string, { status?: string; detail?: string }>;
   const accessQ = chapters.flatMap((ch) => ch.screens.flatMap((s) => s.questions)).find((q) => q.type === 'access');
   for (const [id, x] of Object.entries(access)) {
     const title = accessQ && accessQ.type === 'access' ? (accessQ.items.find((i) => i.id === id)?.title ?? id) : id;
     if (x.status === 'need-help') add(`Access, ${title}: needs help. Schedule a quick call.`);
-    if (x.status === 'none') add(`Access, ${title}: they don't have this. Plan to set it up.`);
+    if (x.status === 'none') {
+      const label = accessQ && accessQ.type === 'access' ? accessQ.items.find((i) => i.id === id)?.statuses.find((s) => s.id === 'none')?.label : undefined;
+      add(`Access, ${title}: "${label ?? "Don't have this"}". Plan to sort it out together.`);
+    }
   }
   const emailHost = access.email?.detail;
   if (emailHost === 'web-host' || emailHost === 'not-sure' || (c.accessItems.includes('email') && !emailHost)) add('Email host is web host, unknown or not answered: DNS cutover risk. Document MX records before launch.');
@@ -181,8 +193,13 @@ export function buildFlags(c: ClientConfig, answers: Answers, uploads: UploadInf
     if (choice(answers, id) === 'ask') add(`${c.partnerName ?? 'Partner'}: "${id.replace('partner-', '')}" needs their OK. Follow up before writing those pages.`);
   }
   const wishes = val(answers, 'feature-wishes');
-  const wishList: string[] = [...(wishes?.picks ?? []), ...(wishes?.other ? [wishes.other] : [])];
-  if (wishList.length) add(`Outside the agreed page list: ${wishList.join(', ')}. Scope conversation, quoted separately.`);
+  const wishQ = chapters.flatMap((ch) => ch.screens.flatMap((s) => s.questions)).find((q) => q.id === 'feature-wishes');
+  const wishLabel = (id: string) => (wishQ && wishQ.type === 'multi' ? (wishQ.options.find((o) => o.id === id)?.label ?? id) : id);
+  const wishList: string[] = [...(wishes?.picks ?? []).map(wishLabel), ...(wishes?.other ? [`"${wishes.other}"`] : [])];
+  if (wishList.length) add(`Possible scope: wants ${list(wishList)} beyond the agreed pages. Scope conversation, quoted separately.`);
+  const addedServices = ((val(answers, 'pages')?.added ?? []) as { name?: string }[]).map((x) => x?.name?.trim()).filter(Boolean) as string[];
+  if (addedServices.length) add(`Possible scope: added ${addedServices.length === 1 ? 'a service' : 'services'} not on the agreed list: ${list(addedServices)}. Scope conversation, quoted separately.`);
+  if (typeof val(answers, 'pages-extra') === 'string' && val(answers, 'pages-extra').trim()) add(`Possible scope: read their extra page note: "${val(answers, 'pages-extra').trim()}".`);
   if (choice(answers, 'exact-color') === 'paste' && val(answers, 'color-code')) add(`Brand ${c.brand.primaryName} given as ${val(answers, 'color-code')}: update the config and galleries.`);
   if (choice(answers, 'lead-flow') && choice(answers, 'lead-flow') !== c.leadFlowRecommendation && choice(answers, 'lead-flow') !== 'talk') add('Lead flow: picked something other than the recommendation. Confirm on the call.');
   const intake = val(answers, 'intake');
@@ -208,7 +225,7 @@ export function buildFlags(c: ClientConfig, answers: Answers, uploads: UploadInf
   return flags;
 }
 
-export function buildBriefMarkdown(c: ClientConfig, answers: Answers, uploads: UploadInfo[], meta: { submittedAt?: string | null; lastActivityAt?: string | null }): string {
+export function buildBriefMarkdown(c: ClientConfig, answers: Answers, uploads: UploadInfo[], meta: { submittedAt?: string | null; lastActivityAt?: string | null; firstSent?: { at: string; answers: Answers } }): string {
   const chapters = buildChapters(c);
   const sections = buildReview(c, answers, uploads, chapters);
   const flags = buildFlags(c, answers, uploads, chapters);
@@ -251,7 +268,7 @@ export function buildBriefMarkdown(c: ClientConfig, answers: Answers, uploads: U
   for (const s of sections) {
     lines.push(`## ${s.title}`);
     lines.push('');
-    if (!s.items.length) lines.push('- Nothing answered yet.');
+    if (!s.items.length) lines.push(s.visited ? '- Skipped.' : '- Not reached yet.');
     for (const it of s.items) {
       const exit = it.exit ? ` [${EXIT_TEXT[it.exit]}]` : '';
       if (it.text.includes('\n')) {
@@ -262,6 +279,16 @@ export function buildBriefMarkdown(c: ClientConfig, answers: Answers, uploads: U
     lines.push('');
   }
 
+  if (meta.firstSent) {
+    const changes = diffAnswers(c, meta.firstSent.answers, answers, chapters);
+    if (changes.length) {
+      lines.push(`## Changed since they first sent it (${meta.firstSent.at} UTC)`);
+      lines.push('');
+      for (const ch of changes) lines.push(`- **${ch.label}**: was ${ch.before.replace(/\n/g, ' / ')}; now ${ch.after.replace(/\n/g, ' / ')}`);
+      lines.push('');
+    }
+  }
+
   if (uploads.length) {
     lines.push('## Uploaded files');
     lines.push('');
@@ -269,4 +296,29 @@ export function buildBriefMarkdown(c: ClientConfig, answers: Answers, uploads: U
     lines.push('');
   }
   return lines.join('\n');
+}
+
+export type AnswerChange = { qid: string; label: string; before: string; after: string };
+
+/** What changed between two sets of answers, in plain words. Internal keys (_pos, _visited) are ignored. */
+export function diffAnswers(c: ClientConfig, before: Answers, after: Answers, chapters: Chapter[] = buildChapters(c)): AnswerChange[] {
+  const out: AnswerChange[] = [];
+  const show = (q: Question, a: Answers) => {
+    const x = a[q.id];
+    const text = x ? summarize(q, x.v, c, []) : q.type === 'multi' && q.defaultAll ? summarize(q, null, c, []) : null;
+    const exit = x?.exit ? EXIT_TEXT[x.exit] : '';
+    return [text ?? '', exit ? `[${exit}]` : ''].filter(Boolean).join(' ') || '(blank)';
+  };
+  for (const ch of chapters) {
+    for (const s of ch.screens) {
+      for (const q of s.questions) {
+        if (!isAnswerable(q) || q.type === 'upload') continue;
+        if (JSON.stringify(before[q.id] ?? null) === JSON.stringify(after[q.id] ?? null)) continue;
+        const b = show(q, before);
+        const a = show(q, after);
+        if (b !== a) out.push({ qid: q.id, label: q.label ?? q.title, before: b, after: a });
+      }
+    }
+  }
+  return out;
 }

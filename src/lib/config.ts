@@ -72,17 +72,29 @@ export const ClientConfigSchema = z.object({
   layouts: z.array(z.string()).optional(),
   imagery: z.array(ImageryTile).default([]),
   examples: z
-    .array(z.object({ id: z.string().regex(/^[a-z0-9-]+$/), name: z.string(), url: z.string().url(), why: z.string() }))
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-z0-9-]+$/),
+        name: z.string(),
+        url: z.string().url(),
+        why: z.string(),
+        /** A saved screenshot in /public, for example "examples/hart-to-heart/perel.jpg". */
+        image: z.string().regex(/^[a-z0-9/_.-]+\.(jpg|jpeg|png|webp)$/).optional(),
+      }),
+    )
     .max(8)
     .default([]),
   services: z.array(z.string()).min(1),
   pages: z.array(Page).min(1),
+  /** Total services the client can end up with on the pages screen (agreed ones plus any they add). */
+  maxServices: z.number().int().positive().default(7),
   featureWishOptions: z.array(z.string()).optional(),
   prefill: z.object({
     nameOnSite: z.string(),
     title: z.string(),
     location: z.string(),
     publicEmail: z.string(),
+    phone: z.string().optional(),
     credentials: z.array(z.string()).default([]),
     neverImagery: z.array(z.string()).default([]),
   }),

@@ -184,7 +184,7 @@ export function ImageryStage({ src, label, credit, creditUrl }: { src: string; l
   );
 }
 
-export function ExampleStage({ url, name }: { url: string; name: string }) {
+export function ExampleStage({ url, name, image, base }: { url: string; name: string; image?: string; base: string }) {
   const [failed, setFailed] = useState(false);
   const host = (() => {
     try {
@@ -193,13 +193,14 @@ export function ExampleStage({ url, name }: { url: string; name: string }) {
       return url;
     }
   })();
-  const shot = `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=1200&h=900`;
+  // A saved screenshot shipped with the app loads instantly; the live screenshot service is only a fallback.
+  const shot = image ? `${base}${image.replace(/^\/+/, '')}` : `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=1200&h=900`;
   return (
     <div className="eq-tile__stage" style={{ background: '#F6F7F9' }}>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#5b6168', textAlign: 'center', padding: 16 }}>
         <span style={{ font: '700 18px/24px system-ui, sans-serif', color: '#0b0c0f' }}>{name}</span>
         <span style={{ font: '400 14px/20px system-ui, sans-serif' }}>{host}</span>
-        <span style={{ font: '400 13px/18px system-ui, sans-serif' }}>Preview loading. Tap "Open the site" to see it live.</span>
+        <span style={{ font: '400 13px/18px system-ui, sans-serif' }}>Tap "Open the site" to see it live.</span>
       </div>
       {!failed && <img src={shot} alt={`Preview of ${name}`} loading="lazy" onError={() => setFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />}
     </div>

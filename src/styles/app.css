@@ -79,3 +79,68 @@ html, body { overflow-x: clip; }
 
 .bp-banner--preview { background: var(--blue-tint); }
 .bp-banner--preview .eq-icon { color: var(--blue-ink); }
+
+/* ---------- October 8 feedback pass ---------- */
+
+/* Sliders: blue dot on a light grey line, blue up to the dot once it's been moved. */
+.eq-range::-webkit-slider-runnable-track { background: var(--line); }
+.eq-range[data-touched="true"]::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--blue) var(--pct, 50%), var(--line) var(--pct, 50%)); }
+.eq-range::-moz-range-track { background: var(--line); }
+.eq-range[data-touched="true"]::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--blue); }
+.eq-range[data-touched="true"]::-webkit-slider-thumb { background: var(--blue); border: 3px solid var(--paper); box-shadow: 0 0 0 1.5px var(--blue), 0 2px 8px rgba(11, 12, 15, 0.16); }
+.eq-range[data-touched="true"]::-moz-range-thumb { background: var(--blue); border: 3px solid var(--paper); box-shadow: 0 0 0 1.5px var(--blue); }
+.eq-range::-webkit-slider-thumb { border-color: var(--blue); }
+.eq-range::-moz-range-thumb { border-color: var(--blue); }
+
+/* Ranking: only the grip captures touch, so the page still scrolls over the list. */
+.eq-rank__item { touch-action: auto; transition: transform 0.16s ease, box-shadow 0.16s ease; grid-template-columns: 44px 24px 1fr auto; padding-left: 0; }
+.eq-rank__grip { touch-action: none; width: 44px; height: 52px; cursor: grab; }
+.eq-rank__grip:active { cursor: grabbing; }
+.eq-rank__item[data-dragging="true"] { background: var(--paper); }
+
+/* Chapter 1: filled-in fields carry a small tag. */
+.bp-prefilled { position: relative; }
+.bp-prefilled__tag { position: absolute; right: 0; top: 2px; padding: 1px 8px; border-radius: 999px; background: var(--surface); color: var(--slate); font: 600 12px/18px var(--font-sans); }
+.bp-prefilled[data-edited="true"] .bp-prefilled__tag { background: var(--blue-tint); color: var(--blue-ink); }
+.bp-prefilled[data-edited="false"] .eq-input { background: var(--surface); }
+.bp-prefilled .eq-field__label { padding-right: 110px; }
+
+/* Neutral "we'll talk about it" line for anything that could change scope. */
+.bp-scope-note { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--blue-tint); font-size: 15px; line-height: 22px; }
+
+/* Pages */
+.bp-pagecard { display: grid; gap: 8px; padding: 10px 10px 10px 16px; border: 1.5px solid var(--line-control); border-radius: 16px; background: var(--paper); }
+.bp-pagecard[data-on="true"] { border: 2px solid var(--blue); padding: 9.5px 9.5px 9.5px 15.5px; }
+.bp-pagecard--added { border-style: dashed; }
+.bp-pagecard__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.bp-pagecard__name { font-weight: 600; }
+.bp-pagecard__add { justify-self: start; min-height: 32px; padding: 0 4px; font-size: 14px; }
+.bp-excited { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--line-control); background: var(--paper); color: var(--slate); font: 600 14px/20px var(--font-sans); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+.bp-excited[aria-pressed="true"] { border-color: var(--pink); background: #fde7ed; color: #a3123a; }
+.bp-excited .eq-icon { color: currentColor; }
+
+/* Screen changes: a quick fade and lift instead of a jump. */
+@keyframes bp-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.bp-enter { animation: bp-enter 0.24s ease-out both; }
+
+/* "Chapter 2 done" */
+@keyframes bp-cheer { 0% { opacity: 0; transform: translate(-50%, -8px) scale(0.96); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1); } 82% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -6px); } }
+@keyframes bp-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.bp-cheer { position: fixed; top: calc(118px + env(safe-area-inset-top)); left: 50%; z-index: 45; display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px 10px 10px; border-radius: 999px; background: var(--ink); color: var(--on-ink); font: 700 15px/20px var(--font-sans); box-shadow: var(--shadow-pop); animation: bp-cheer 1.9s ease-out both; pointer-events: none; white-space: nowrap; }
+.bp-cheer__check { width: 28px; height: 28px; border-radius: 999px; background: var(--blue); display: grid; place-items: center; }
+.bp-cheer__check svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; animation: bp-draw 0.4s 0.18s ease-out both; }
+
+/* Halfway: a hand-drawn marker swipe behind the words. */
+.bp-marker { position: relative; display: inline-block; isolation: isolate; white-space: nowrap; }
+.bp-marker > svg { position: absolute; left: -5%; width: 110%; top: 4%; height: 96%; z-index: -1; overflow: visible; pointer-events: none; }
+.bp-marker > svg path { fill: none; stroke: #bcd7fd; stroke-width: 30; stroke-linecap: round; stroke-dasharray: 1; animation: bp-draw 0.55s 0.25s cubic-bezier(0.3, 0.6, 0.3, 1) both; }
+
+/* Done: the pink circle draws itself around "all set". */
+.bp-done .eq-circled > svg path { stroke-width: 3; stroke-dasharray: 1; animation: bp-draw 0.9s 0.45s cubic-bezier(0.45, 0.1, 0.25, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-enter, .bp-cheer, .bp-cheer__check svg, .bp-marker > svg path, .bp-done .eq-circled > svg path { animation: none !important; }
+  .bp-cheer { transform: translateX(-50%); }
+}
+
+.bp-was { color: var(--slate); text-decoration: line-through; text-decoration-color: rgba(91, 97, 104, 0.5); }

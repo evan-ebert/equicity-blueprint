@@ -7,9 +7,9 @@ import Base from '../../layouts/Base.astro';
 import { Icon } from '../../components/icons';
 import { getAllClientConfigs } from '../../lib/config';
 import { ADMIN_COOKIE, SetupError, formatCode, generateCode, hashCode, hasAdminSession } from '../../lib/auth';
-import { getAnswers, getClientRow, listEvents, listUploads, logEvent, resetClientData, setPasscode } from '../../lib/db';
+import { getAnswers, getClientRow, listEvents, listSubmissions, listUploads, logEvent, resetClientData, setPasscode } from '../../lib/db';
 import { buildChapters, chapterProgress, flatQuestions } from '../../lib/chapters';
-import { buildFlags, buildReview } from '../../lib/summary';
+import { buildFlags, buildReview, diffAnswers } from '../../lib/summary';
 import { getEnv, withBase } from '../../lib/http';
 import { ago, fileSize, pacific, statusLabel } from '../../lib/admin';
 
@@ -47,12 +47,19 @@ if (config && Astro.request.method === 'POST') {
   }
 }
 
-const [row, answers, uploads, events] = config
-  ? await Promise.all([getClientRow(env.DB, config.slug), getAnswers(env.DB, config.slug), listUploads(env.DB, config.slug), listEvents(env.DB, config.slug, 40)])
-  : [null, {}, [], []];
+const [row, answers, uploads, events, sends] = config
+  ? await Promise.all([getClientRow(env.DB, config.slug), getAnswers(env.DB, config.slug), listUploads(env.DB, config.slug), listEvents(env.DB, config.slug, 40), listSubmissions(env.DB, config.slug)])
+  : [null, {}, [], [], []];
 const chapters = config ? buildChapters(config) : [];
 const review = config ? buildReview(config, answers, uploads, chapters) : [];
 const flags = config ? buildFlags(config, answers, uploads, chapters) : [];
+// Each send compared with the one before it, newest first, plus anything changed since the last send.
+const sendHistory = config
+  ? sends
+      .map((s, i) => ({ at: s.created_at, n: i + 1, changes: i === 0 ? [] : diffAnswers(config, sends[i - 1].answers, s.answers, chapters) }))
+      .reverse()
+  : [];
+const sinceLast = config && sends.length ? diffAnswers(config, sends[sends.length - 1].answers, answers, chapters) : [];
 const questionTitle = new Map(flatQuestions(chapters).map(({ q }) => [q.id, q.label ?? q.title]));
 const origin = env.PUBLIC_ORIGIN || Astro.url.origin;
 const link = config ? `${origin}${withBase(config.slug)}` : '';
@@ -153,6 +160,39 @@ const eventLabel: Record<string, string> = {
           )}
         </section>
 
+        {sends.length > 0 && (
+          <section class="bp-review" aria-label="Sends">
+            <div class="bp-review__head"><h2 class="bp-review__title">Sends ({sends.length})</h2></div>
+            <p class="eq-muted" style="margin:0;font-size:15px">A copy is kept every time they tap Send, so nothing they sent is ever lost.</p>
+            {sinceLast.length > 0 && (
+              <div class="eq-stack" style="gap:8px">
+                <span class="eq-why__label">Changed since their last send, not sent yet</span>
+                <dl class="bp-review__list">
+                  {sinceLast.map((ch) => (
+                    <div><dt>{ch.label}</dt><dd><span class="bp-was">Was: {ch.before}</span><br />Now: {ch.after}</dd></div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            {sendHistory.map((h) => (
+              <div class="eq-stack" style="gap:8px">
+                <span class="eq-why__label">Send {h.n} · {pacific(h.at)}</span>
+                {h.n === 1 ? (
+                  <p class="eq-muted" style="margin:0;font-size:15px">The first send.</p>
+                ) : h.changes.length ? (
+                  <dl class="bp-review__list">
+                    {h.changes.map((ch) => (
+                      <div><dt>{ch.label}</dt><dd><span class="bp-was">Was: {ch.before}</span><br />Now: {ch.after}</dd></div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p class="eq-muted" style="margin:0;font-size:15px">No answers changed.</p>
+                )}
+              </div>
+            ))}
+          </section>
+        )}
+
         <section class="bp-review" aria-label="Files">
           <div class="bp-review__head"><h2 class="bp-review__title">Files ({uploads.length})</h2></div>
           {uploads.length ? (
@@ -177,7 +217,7 @@ const eventLabel: Record<string, string> = {
           <section class="bp-review" aria-label={s.title}>
             <div class="bp-review__head"><h2 class="bp-review__title">{s.title}</h2></div>
             {s.items.length === 0 ? (
-              <p class="eq-muted" style="margin:0;font-size:15px">Nothing yet</p>
+              <p class="eq-muted" style="margin:0;font-size:15px">{s.visited ? 'Skipped' : 'Not reached yet'}</p>
             ) : (
               <dl class="bp-review__list">
                 {s.items.map((it) => (

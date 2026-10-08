@@ -65,7 +65,7 @@ export function Tick() {
 export function MarkerCircle() {
   return (
     <svg viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M20 54 C 14 24, 70 8, 112 10 C 162 12, 194 32, 188 56 C 182 82, 130 94, 90 92 C 44 90, 10 74, 16 48 C 20 32, 44 20, 70 15" />
+      <path d="M20 54 C 14 24, 70 8, 112 10 C 162 12, 194 32, 188 56 C 182 82, 130 94, 90 92 C 44 90, 10 74, 16 48 C 20 32, 44 20, 70 15" pathLength={1} />
     </svg>
   );
 }

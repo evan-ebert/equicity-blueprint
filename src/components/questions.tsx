@@ -8,6 +8,7 @@ import { ExampleStage, ImageryStage, LayoutStage, PaletteStage, TYPE_SPECS, Type
 
 export type Ctx = {
   config: ClientConfig;
+  base: string;
   answers: Answers;
   uploads: UploadInfo[];
   upload: (qid: string, file: File, onProgress: (pct: number) => void) => Promise<void>;
@@ -28,10 +29,14 @@ function setV(set: Props['set'], value: AnswerValue | undefined, v: unknown) {
 
 // ---------- shared pieces ----------
 
+/** For these, "Not sure yet" or "Let's talk" sits alongside what's there (files, rows). Everywhere else it replaces the answer. */
+const EXIT_KEEPS_ANSWER = new Set<Question['type']>(['upload', 'repeat', 'pages', 'access', 'confirm']);
+
 export function Exits({ q, value, set }: { q: Question; value: AnswerValue | undefined; set: Props['set'] }) {
+  const keep = EXIT_KEEPS_ANSWER.has(q.type);
   const toggle = (exit: 'not-sure' | 'talk') => {
-    if (value?.exit === exit) set(value.v === undefined || value.v === null ? null : { v: value.v });
-    else set({ v: value?.v ?? null, exit });
+    if (value?.exit === exit) set(keep && value.v !== undefined && value.v !== null ? { v: value.v } : null);
+    else set({ v: keep ? (value?.v ?? null) : null, exit });
   };
   return (
     <div className="eq-exits">
@@ -94,13 +99,15 @@ export function TextBox({
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change(e.target.value),
     onBlur: () => {
       window.clearTimeout(timer.current);
-      if (text !== latest.current) commit(text);
+      // Save a beat after leaving the field, so the tap that moved focus lands before anything re-renders.
+      const t = text;
+      if (t !== latest.current) window.setTimeout(() => commit(t), 160);
     },
   };
   return (
     <label className="eq-field">
       {!hideLabel && <span className="eq-field__label">{label}</span>}
-      {multiline ? <textarea {...common} rows={3} /> : <input {...common} type={inputType} inputMode={inputType === 'url' ? 'url' : undefined} />}
+      {multiline ? <textarea {...common} rows={3} /> : <input {...common} type={inputType} inputMode={inputType === 'url' ? 'url' : inputType === 'tel' ? 'tel' : inputType === 'email' ? 'email' : undefined} />}
       {help && <span className="eq-field__help">{help}</span>}
       {secret && (
         <span className="eq-field__warn" role="alert">
@@ -143,9 +150,15 @@ function Confirm({ q, value, set }: Props) {
   const v = (value?.v ?? {}) as Record<string, string | boolean>;
   return (
     <div className="eq-stack" style={{ gap: 14 }}>
-      {q.fields.map((f) => (
-        <TextBox key={f.id} label={f.label} inputType={f.inputType} value={(v[f.id] as string) ?? f.value} onSave={(s) => set({ v: { ...v, [f.id]: s === f.value ? undefined : s, confirmed: true } })} />
-      ))}
+      {q.fields.map((f) => {
+        const edited = typeof v[f.id] === 'string';
+        return (
+          <div key={f.id} className="bp-prefilled" data-edited={edited}>
+            <span className="bp-prefilled__tag">{edited ? 'Edited' : 'From your site'}</span>
+            <TextBox label={f.label} inputType={f.inputType} value={(v[f.id] as string) ?? f.value} onSave={(s) => set({ v: { ...v, [f.id]: s === f.value ? undefined : s, confirmed: true } })} />
+          </div>
+        );
+      })}
       <button type="button" className="eq-chip eq-chip--row" role="checkbox" aria-checked={!!v.confirmed} onClick={() => set({ v: { ...v, confirmed: !v.confirmed } })}>
         <span>Looks right</span>
         <Tick />
@@ -196,7 +209,7 @@ function Multi({ q, value, set }: Props) {
       </div>
       {full && <p className="eq-q__hint" style={{ margin: 0 }}>That's {q.max}. Tap one to swap it out.</p>}
       {q.other && <TextBox label="Something else" hideLabel placeholder="Something else? Add it here" value={v.other ?? ''} onSave={(s) => set({ v: { ...v, picks, other: s || undefined } })} />}
-      {q.anyNote && (picks.length > 0 || v.other) && <p style={{ margin: 0, padding: '12px 14px', borderRadius: 12, background: 'var(--blue-tint)', fontSize: 15, lineHeight: '22px' }}>{q.anyNote}</p>}
+      {q.anyNote && (picks.length > 0 || v.other) && <p className="bp-scope-note">{q.anyNote}</p>}
     </div>
   );
 }
@@ -239,7 +252,7 @@ function Rate({ q, value, set, ctx }: Props) {
       }
       case 'example': {
         const ex = c.examples.find((e) => e.id === id)!;
-        return <ExampleStage url={ex.url} name={ex.name} />;
+        return <ExampleStage url={ex.url} name={ex.name} image={ex.image} base={ctx.base} />;
       }
     }
   };
@@ -275,9 +288,9 @@ function Rate({ q, value, set, ctx }: Props) {
                   </button>
                 ))}
               </div>
-              {q.tags && (r === 'love' || r === 'maybe') && (
+              {q.tags && r && (
                 <div className="eq-stack" style={{ gap: 8 }}>
-                  <span className="eq-field__help">What do you like about it?</span>
+                  <span className="eq-field__help">{r === 'no' ? "What's not working?" : 'What do you like about it?'}</span>
                   <div className="eq-chips" style={{ gap: 8 }}>
                     {q.tags.map((t) => {
                       const tags = v[item.id]?.tags ?? [];
@@ -291,8 +304,15 @@ function Rate({ q, value, set, ctx }: Props) {
                   </div>
                 </div>
               )}
-              {(r === 'love' || (q.tags && r === 'maybe')) && (
-                <TextBox label="What do you love about it?" hideLabel placeholder={q.tags ? 'Anything else? (optional)' : 'What do you love about it? (optional)'} value={v[item.id]?.note ?? ''} onSave={(s) => update(item.id, { note: s || undefined })} />
+              {(r === 'love' || r === 'no' || (q.tags && r === 'maybe')) && (
+                <TextBox
+                  key={r === 'no' ? 'no' : 'yes'}
+                  label={r === 'no' ? "What's not working for you?" : 'What do you love about it?'}
+                  hideLabel
+                  placeholder={q.tags ? 'Anything else? (optional)' : r === 'no' ? "What's not working for you? (optional)" : 'What do you love about it? (optional)'}
+                  value={v[item.id]?.note ?? ''}
+                  onSave={(s) => update(item.id, { note: s || undefined })}
+                />
               )}
             </div>
           </article>
@@ -323,6 +343,7 @@ function Sliders({ q, value, set }: Props) {
               step={5}
               value={touched ? v[s.id] : 50}
               data-touched={touched}
+              style={{ '--pct': `${touched ? v[s.id] : 50}%` } as React.CSSProperties}
               aria-label={`${s.left} to ${s.right}`}
               aria-valuetext={touched ? `${v[s.id]} out of 100` : 'Not set'}
               onChange={(e) => set({ v: { ...v, [s.id]: Number(e.target.value) } })}
@@ -347,8 +368,8 @@ function Rank({ q, value, set }: Props) {
   const ids = q.items.map((i) => i.id);
   const stored = Array.isArray(value?.v) ? (value!.v as string[]) : null;
   const order = stored ? [...stored.filter((id) => ids.includes(id)), ...ids.filter((id) => !stored.includes(id))] : ids;
-  const [drag, setDrag] = useState<{ id: string; startY: number; dy: number } | null>(null);
-  const rowH = 68;
+  const list = useRef<HTMLOListElement>(null);
+  const [drag, setDrag] = useState<{ id: string; from: number; startY: number; dy: number; heights: number[] } | null>(null);
   const move = (from: number, to: number) => {
     if (to < 0 || to >= order.length || from === to) return;
     const next = [...order];
@@ -356,28 +377,59 @@ function Rank({ q, value, set }: Props) {
     next.splice(to, 0, x);
     set({ v: next });
   };
+  // Where the dragged row would land, using the real row heights so it works at any text size.
+  const target = (d: NonNullable<typeof drag>) => {
+    let idx = d.from;
+    let dy = d.dy;
+    while (dy > 0 && idx < order.length - 1 && dy > d.heights[idx + 1] / 2) {
+      dy -= d.heights[idx + 1];
+      idx++;
+    }
+    while (dy < 0 && idx > 0 && -dy > d.heights[idx - 1] / 2) {
+      dy += d.heights[idx - 1];
+      idx--;
+    }
+    return idx;
+  };
   const onDown = (e: React.PointerEvent, id: string) => {
+    e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ id, startY: e.clientY, dy: 0 });
+    const rows = Array.from(list.current?.querySelectorAll<HTMLElement>('[data-rank-row]') ?? []);
+    const heights = rows.map((el) => el.getBoundingClientRect().height + 8);
+    setDrag({ id, from: order.indexOf(id), startY: e.clientY, dy: 0, heights });
   };
   const onMove = (e: React.PointerEvent) => drag && setDrag({ ...drag, dy: e.clientY - drag.startY });
   const onUp = () => {
     if (!drag) return;
-    const from = order.indexOf(drag.id);
-    move(from, Math.max(0, Math.min(order.length - 1, from + Math.round(drag.dy / rowH))));
+    move(drag.from, target(drag));
     setDrag(null);
   };
+  const to = drag ? target(drag) : -1;
+  const shiftFor = (i: number): number => {
+    if (!drag || i === drag.from) return 0;
+    const h = drag.heights[drag.from];
+    if (drag.from < to && i > drag.from && i <= to) return -h;
+    if (drag.from > to && i >= to && i < drag.from) return h;
+    return 0;
+  };
   return (
-    <ol className="eq-rank">
+    <ol className="eq-rank" ref={list} data-dragging={!!drag}>
       {order.map((id, i) => {
         const item = q.items.find((x) => x.id === id)!;
         const dragging = drag?.id === id;
+        const shown = drag ? (dragging ? to : i + (shiftFor(i) < 0 ? -1 : shiftFor(i) > 0 ? 1 : 0)) : i;
         return (
-          <li key={id} className="eq-rank__item" data-dragging={dragging} style={dragging ? { transform: `translateY(${drag!.dy}px)`, position: 'relative', zIndex: 2 } : undefined}>
+          <li
+            key={id}
+            data-rank-row
+            className="eq-rank__item"
+            data-dragging={dragging}
+            style={dragging ? { transform: `translateY(${drag!.dy}px)`, position: 'relative', zIndex: 2, transition: 'none' } : { transform: `translateY(${shiftFor(i)}px)` }}
+          >
             <span className="eq-rank__grip" onPointerDown={(e) => onDown(e, id)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)} aria-hidden="true">
               <Icon name="grip" />
             </span>
-            <span className="eq-rank__num">{i + 1}</span>
+            <span className="eq-rank__num">{shown + 1}</span>
             <span className="eq-rank__label">{item.label}</span>
             <span className="eq-rank__moves">
               <button type="button" className="eq-rank__move" aria-label={`Move ${item.label} up`} disabled={i === 0} onClick={() => move(i, i - 1)}>
@@ -403,7 +455,13 @@ function Rank({ q, value, set }: Props) {
 
 function Short({ q, value, set }: Props) {
   if (q.type !== 'short') return null;
-  return <TextBox label={q.title} hideLabel placeholder={q.placeholder} multiline={q.multiline} inputType={q.inputType} value={(value?.v as string) ?? ''} onSave={(s) => set(s ? { v: s, ...(value?.exit ? { exit: value.exit } : {}) } : value?.exit ? { v: null, exit: value.exit } : null)} />;
+  const text = typeof value?.v === 'string' ? value.v : '';
+  return (
+    <div className="eq-stack">
+      <TextBox label={q.title} hideLabel placeholder={q.placeholder} multiline={q.multiline} inputType={q.inputType} value={text} onSave={(s) => set(s ? { v: s } : value?.exit ? { v: null, exit: value.exit } : null)} />
+      {q.note && text.trim() && <p className="bp-scope-note">{q.note}</p>}
+    </div>
+  );
 }
 
 const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -586,23 +644,37 @@ function Repeat({ q, value, set }: Props) {
   );
 }
 
+function ExcitedToggle({ on, name, onClick }: { on: boolean; name: string; onClick: () => void }) {
+  return (
+    <button type="button" className="bp-excited" aria-pressed={on} aria-label={`Excited about ${name}`} onClick={onClick}>
+      <Icon name="heart" size={16} fill={on ? 'currentColor' : undefined} />
+      Excited
+    </button>
+  );
+}
+
+type AddedService = { name?: string; note?: string; excited?: boolean };
+
 function Pages({ q, value, set }: Props) {
   if (q.type !== 'pages') return null;
-  const v = (value?.v ?? {}) as { starred?: string[]; notes?: Record<string, string> };
+  const v = (value?.v ?? {}) as { starred?: string[]; notes?: Record<string, string>; added?: AddedService[] };
   const starred = v.starred ?? [];
   const notes = v.notes ?? {};
+  const added = v.added ?? [];
   const [open, setOpen] = useState<string | null>(null);
+  const save = (patch: Partial<typeof v>) => set({ v: { ...v, starred, notes, added, ...patch } });
   const groups: { id: 'services' | 'work' | 'core'; label: string }[] = [
     { id: 'services', label: 'Services' },
     { id: 'work', label: 'Your work' },
     { id: 'core', label: 'The essentials' },
   ];
-  const toggleStar = (id: string) => set({ v: { ...v, starred: starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id] } });
+  const toggleStar = (id: string) => save({ starred: starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id] });
+  const updateAdded = (i: number, patch: AddedService) => save({ added: added.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
   return (
     <div className="eq-stack" style={{ gap: 20 }}>
       {groups.map((g) => {
         const pages = q.pages.filter((p) => p.group === g.id);
-        if (!pages.length) return null;
+        if (!pages.length && !(g.id === 'services' && q.maxAddedServices > 0)) return null;
         return (
           <div key={g.id} className="eq-stack" style={{ gap: 8 }}>
             <span className="eq-why__label">{g.label}</span>
@@ -610,28 +682,45 @@ function Pages({ q, value, set }: Props) {
               const on = starred.includes(p.id);
               const showNote = open === p.id || !!notes[p.id];
               return (
-                <div key={p.id} style={{ display: 'grid', gap: 8, padding: '4px 4px 4px 16px', border: on ? '2px solid var(--blue)' : '1.5px solid var(--line-control)', borderRadius: 16, background: 'var(--paper)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 48 }}>
-                    <span style={{ display: 'grid' }}>
-                      <span style={{ fontWeight: 600 }}>{p.name}</span>
-                      {!showNote && (
-                        <button type="button" className="eq-btn eq-btn--quiet" style={{ minHeight: 28, padding: 0, justifyContent: 'flex-start', fontSize: 14 }} onClick={() => setOpen(p.id)}>
-                          Add a note
-                        </button>
-                      )}
-                    </span>
-                    <button type="button" aria-label={`${on ? 'Unstar' : 'Star'} ${p.name}`} aria-pressed={on} onClick={() => toggleStar(p.id)} style={{ flex: 'none', width: 48, height: 48, border: 0, background: 'transparent', borderRadius: 12, color: on ? 'var(--blue)' : 'var(--slate)', cursor: 'pointer' }}>
-                      <Icon name="star" size={22} fill={on ? 'var(--blue)' : undefined} />
-                    </button>
+                <div key={p.id} className="bp-pagecard" data-on={on}>
+                  <div className="bp-pagecard__row">
+                    <span className="bp-pagecard__name">{p.name}</span>
+                    <ExcitedToggle on={on} name={p.name} onClick={() => toggleStar(p.id)} />
                   </div>
-                  {showNote && (
-                    <div style={{ paddingRight: 12, paddingBottom: 10 }}>
-                      <TextBox label={`What should the ${p.name} page do or include?`} help="What should this page do or include?" hideLabel value={notes[p.id] ?? ''} onSave={(s) => set({ v: { ...v, starred, notes: { ...notes, [p.id]: s } } })} />
-                    </div>
+                  {showNote ? (
+                    <TextBox label={`What should the ${p.name} page do or include?`} hideLabel placeholder="What should this page do or include?" value={notes[p.id] ?? ''} onSave={(s) => save({ notes: { ...notes, [p.id]: s } })} />
+                  ) : (
+                    <button type="button" className="eq-btn eq-btn--quiet bp-pagecard__add" onClick={() => setOpen(p.id)}>
+                      <Icon name="plus" size={16} />
+                      Add a note
+                    </button>
                   )}
                 </div>
               );
             })}
+            {g.id === 'services' &&
+              added.map((a, i) => (
+                <div key={`added-${i}`} className="bp-pagecard bp-pagecard--added" data-on={!!a.excited}>
+                  <div className="bp-pagecard__row">
+                    <span className="eq-field__label">Another service</span>
+                    <button type="button" className="eq-btn eq-btn--quiet" style={{ minHeight: 36 }} onClick={() => save({ added: added.filter((_, j) => j !== i) })}>
+                      Remove
+                    </button>
+                  </div>
+                  <TextBox label="Service name" hideLabel placeholder="Service name" value={a.name ?? ''} onSave={(s) => updateAdded(i, { name: s })} />
+                  <TextBox label="What it is, in a line" hideLabel placeholder="What it is, in a line (optional)" value={a.note ?? ''} onSave={(s) => updateAdded(i, { note: s })} />
+                  <div className="bp-pagecard__row">
+                    <ExcitedToggle on={!!a.excited} name={a.name || 'this service'} onClick={() => updateAdded(i, { excited: !a.excited })} />
+                  </div>
+                </div>
+              ))}
+            {g.id === 'services' && added.length < q.maxAddedServices && (
+              <button type="button" className="eq-btn eq-btn--secondary" style={{ justifySelf: 'start' }} onClick={() => save({ added: [...added, {}] })}>
+                <Icon name="plus" size={18} />
+                Add a service
+              </button>
+            )}
+            {g.id === 'services' && added.some((a) => a.name?.trim()) && <p className="bp-scope-note">{q.addedNote}</p>}
           </div>
         );
       })}
@@ -641,13 +730,21 @@ function Pages({ q, value, set }: Props) {
 
 function Access({ q, value, set }: Props) {
   if (q.type !== 'access') return null;
-  const v = (value?.v ?? {}) as Record<string, { status?: string; detail?: string }>;
-  const update = (id: string, patch: { status?: string; detail?: string }) => set({ v: { ...v, [id]: { ...v[id], ...patch } } });
+  const v = (value?.v ?? {}) as Record<string, { status?: string; detail?: string; other?: string }>;
+  const update = (id: string, patch: { status?: string; detail?: string; other?: string }) => set({ v: { ...v, [id]: { ...v[id], ...patch } } });
   return (
     <div className="eq-stack" style={{ gap: 14 }}>
       {q.items.map((item) => {
         const x = v[item.id] ?? {};
         const status = item.statuses.find((s) => s.id === x.status);
+        // Info-only items finish themselves once the detail is in.
+        const setDetail = (detail: string) => {
+          if (!item.autoDone) return update(item.id, { detail });
+          const filled = detail.trim() !== '' && detail !== 'not-sure';
+          const statusNext = filled ? 'done' : x.status === 'done' ? undefined : x.status;
+          update(item.id, { detail, status: statusNext });
+        };
+        const chips = item.autoDone ? item.statuses.filter((s) => s.id !== 'done') : item.statuses;
         return (
           <section key={item.id} className="eq-access">
             <div className="eq-access__head">
@@ -659,26 +756,29 @@ function Access({ q, value, set }: Props) {
                 <li key={i}>{s}</li>
               ))}
             </ol>
-            {item.detail?.kind === 'short' && <TextBox label={item.detail.label} placeholder={item.detail.placeholder} value={x.detail ?? ''} onSave={(s) => update(item.id, { detail: s })} />}
+            {item.detail?.kind === 'short' && <TextBox label={item.detail.label} placeholder={item.detail.placeholder} value={x.detail ?? ''} onSave={setDetail} />}
             {item.detail?.kind === 'tap' && (
               <div className="eq-stack" style={{ gap: 8 }}>
                 <span className="eq-field__label">{item.detail.label}</span>
                 <div className="eq-chips" style={{ gap: 8 }}>
                   {item.detail.options.map((o) => (
-                    <Chip key={o.id} on={x.detail === o.id} onClick={() => update(item.id, { detail: o.id, status: x.status ?? 'done' })}>
+                    <Chip key={o.id} on={x.detail === o.id} onClick={() => setDetail(o.id)}>
                       {o.label}
                     </Chip>
                   ))}
                 </div>
+                {x.detail === 'other' && <TextBox label="Which one?" placeholder="The company name" value={x.other ?? ''} onSave={(s) => update(item.id, { other: s })} />}
               </div>
             )}
-            <div className="eq-chips" style={{ gap: 8 }} role="radiogroup" aria-label={`${item.title} status`}>
-              {item.statuses.map((s) => (
-                <Chip key={s.id} role="radio" on={x.status === s.id} onClick={() => update(item.id, { status: s.id })}>
-                  {s.label}
-                </Chip>
-              ))}
-            </div>
+            {chips.length > 0 && (
+              <div className="eq-chips" style={{ gap: 8 }} role="radiogroup" aria-label={`${item.title} status`}>
+                {chips.map((s) => (
+                  <Chip key={s.id} role="radio" on={x.status === s.id} onClick={() => update(item.id, { status: x.status === s.id ? undefined : s.id })}>
+                    {s.label}
+                  </Chip>
+                ))}
+              </div>
+            )}
           </section>
         );
       })}

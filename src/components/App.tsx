@@ -5,7 +5,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientConfig } from '../lib/config';
-import { buildChapters, chapterProgress, isVisible, type AnswerValue, type Answers, type Chapter, type Screen } from '../lib/chapters';
+import { buildChapters, chapterProgress, isVisible, visitedScreens, type AnswerValue, type Answers, type Chapter, type Screen } from '../lib/chapters';
+import { burstConfetti } from './confetti';
 import { buildReview, type UploadInfo } from '../lib/summary';
 import { Icon, MarkerCircle } from './icons';
 import { QuestionView, type Ctx } from './questions';
@@ -93,6 +94,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
   const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [cheer, setCheer] = useState<{ text: string; n: number } | null>(null);
 
   // ----- the steps -----
   const steps = useMemo(() => {
@@ -230,6 +232,12 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
   }, [flush]);
 
   useEffect(() => {
+    if (!cheer) return;
+    const t = window.setTimeout(() => setCheer(null), 1900);
+    return () => window.clearTimeout(t);
+  }, [cheer]);
+
+  useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 6000);
     return () => window.clearTimeout(t);
@@ -255,7 +263,17 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
     },
     [queue],
   );
-  const next = () => go(steps[Math.min(index + 1, steps.length - 1)].key);
+  const next = () => {
+    const to = steps[Math.min(index + 1, steps.length - 1)];
+    // Remember which screens were passed: it drives the chapter pills and "Up next" in the review.
+    if (step.kind === 'screen') {
+      const seen = visitedScreens(answers);
+      if (!seen.has(step.key)) setAnswer('_visited', { v: [...seen, step.key] });
+      const leavingChapter = to.kind === 'review' || to.kind === 'break' || (to.kind === 'screen' && to.chapter.id !== step.chapter.id);
+      if (leavingChapter) setCheer({ text: `Chapter ${step.chapter.n} done`, n: Date.now() });
+    }
+    go(to.key);
+  };
   const back = () => go(steps[Math.max(index - 1, 0)].key);
   const firstStepOf = (chapter: Chapter) => steps.find((s) => s.kind !== 'break' && s.kind !== 'review' && s.chapter.id === chapter.id)?.key ?? 'welcome';
 
@@ -314,7 +332,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
     else setToast("Couldn't remove that file just now. Try again in a moment.");
   }, []);
 
-  const ctx: Ctx = { config, answers, uploads, upload, removeUpload };
+  const ctx: Ctx = { config, base, answers, uploads, upload, removeUpload };
 
   // ----- submit -----
   const submit = async () => {
@@ -326,7 +344,11 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
     setSending(true);
     setSendError(null);
     try {
-      await flush();
+      // Let any save in flight finish, then push whatever is still queued, before sending.
+      for (let i = 0; i < 40 && (inflight.current || pending.current.size); i++) {
+        if (!inflight.current) await flush();
+        else await new Promise((r) => window.setTimeout(r, 150));
+      }
       if (pending.current.size) throw new Error('unsaved');
       const res = await fetch(api('submit'), { method: 'POST', credentials: 'same-origin' });
       if (res.status === 401) {
@@ -391,7 +413,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
       ) : step.kind === 'review' ? (
         <Review config={config} chapters={chapters} answers={answers} uploads={uploads} heading={heading} submittedAt={submittedAt} sendError={sendError} onEdit={(chapterId, screenId) => go(`${chapterId}/${screenId}`)} />
       ) : (
-        <main className="eq-page bp-screen" id="main">
+        <main className="eq-page bp-screen bp-enter" id="main" key={step.key}>
           <header className="eq-stack" style={{ gap: 12 }}>
             {step.screen.eyebrow && <span className="eq-eyebrow" style={{ justifySelf: 'start' }}>{step.screen.eyebrow}</span>}
             <h1 className="eq-h1" ref={heading} tabIndex={-1}>
@@ -436,6 +458,17 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
       )}
 
       {menuOpen && <ChapterMenu chapters={chapters} answers={answers} current={done ? null : chapter?.id ?? null} onClose={() => setMenuOpen(false)} onPick={(c) => go(firstStepOf(c))} onReview={() => go('review')} slug={slug} base={base} preview={preview} />}
+
+      {cheer && (
+        <div className="bp-cheer" role="status" key={cheer.n}>
+          <span className="bp-cheer__check" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M5 12.5l4.2 4.2L19 7" pathLength={1} />
+            </svg>
+          </span>
+          {cheer.text}
+        </div>
+      )}
 
       <div className="bp-toast" role="status" aria-live="polite">
         {toast && (
@@ -524,7 +557,7 @@ function Welcome({ config, chapters, heading, title, resumed, onStart }: { confi
   const core = chapters.filter((c) => c.n <= BREAK_AFTER_CHAPTER);
   const rest = chapters.filter((c) => c.n > BREAK_AFTER_CHAPTER);
   return (
-    <main className="eq-page" id="main">
+    <main className="eq-page bp-enter" id="main">
       <header className="eq-stack" style={{ gap: 14 }}>
         <span className="eq-eyebrow" style={{ justifySelf: 'start' }}>
           Your blueprint
@@ -595,14 +628,25 @@ function Welcome({ config, chapters, heading, title, resumed, onStart }: { confi
 }
 
 function Checkpoint({ config, heading, minutes, onReview }: { config: ClientConfig; heading: React.RefObject<HTMLHeadingElement | null>; minutes: number; onReview: () => void }) {
+  useEffect(() => {
+    const t = window.setTimeout(() => burstConfetti(), 250);
+    return () => window.clearTimeout(t);
+  }, []);
   return (
-    <main className="eq-page" id="main">
+    <main className="eq-page bp-enter" id="main">
       <header className="eq-stack" style={{ gap: 14 }}>
         <span className="eq-eyebrow" style={{ justifySelf: 'start' }}>
           Halfway
         </span>
         <h1 className="eq-h1" ref={heading} tabIndex={-1}>
-          That's the <span className="eq-hl">big part</span> done.
+          That's the{' '}
+          <span className="bp-marker">
+            big part
+            <svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M6 23 C 60 20.5, 130 22.5, 194 20.5" pathLength={1} />
+            </svg>
+          </span>{' '}
+          done.
         </h1>
         <p className="eq-lead">
           Your look and feel are in, and that's what {config.ownerName} needs most to start on your homepage direction. Next up: your pages, how people reach you, files and access, and how we'll work. About {minutes} minutes.
@@ -641,7 +685,7 @@ function Review({
   const sections = useMemo(() => buildReview(config, answers, uploads, chapters), [config, answers, uploads, chapters]);
   const talk = sections.flatMap((s) => s.items).filter((i) => i.exit === 'talk').length;
   return (
-    <main className="eq-page" id="main">
+    <main className="eq-page bp-enter" id="main">
       <header className="eq-stack" style={{ gap: 14 }}>
         <span className="eq-eyebrow" style={{ justifySelf: 'start' }}>
           {submittedAt ? 'Sent' : 'Almost done'}
@@ -650,7 +694,7 @@ function Review({
           Here's what we heard
         </h1>
         <p className="eq-lead">
-          Look it over and tap Edit to change anything. {submittedAt ? `You already sent this to ${config.ownerName}. Changes save on their own, and you can send again so ${config.ownerName} gets a heads up.` : `When it feels right, send it to ${config.ownerName}. Gaps are fine.`}
+          Look it over and tap Edit to change anything. {submittedAt ? `You already sent this, and ${config.ownerName} keeps a copy of what you sent. Changes save on their own. Send again so ${config.ownerName} gets a heads up.` : `When it feels right, send it to ${config.ownerName}. Gaps are fine.`}
         </p>
         {talk > 0 && (
           <p className="eq-muted" style={{ margin: 0 }}>
@@ -670,7 +714,7 @@ function Review({
           </div>
           {s.items.length === 0 ? (
             <p className="eq-muted" style={{ margin: 0, fontSize: 15 }}>
-              Skipped for now
+              {s.visited ? 'Skipped for now. Tap Edit to add anything.' : 'Up next'}
             </p>
           ) : (
             <dl className="bp-review__list">
@@ -704,7 +748,7 @@ function Review({
 function Done({ config, heading, onBack }: { config: ClientConfig; heading: React.RefObject<HTMLHeadingElement | null>; onBack: () => void }) {
   const owner = config.ownerName;
   return (
-    <main className="eq-page bp-done" id="main">
+    <main className="eq-page bp-done bp-enter" id="main">
       <header className="eq-stack" style={{ gap: 18 }}>
         <h1 className="eq-display" ref={heading} tabIndex={-1}>
           You're{' '}
