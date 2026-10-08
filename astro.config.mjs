@@ -8,7 +8,7 @@ import copyLint from './scripts/copy-lint-integration.mjs';
 // at build time, so they are deliberately not set here. Every link and fetch uses import.meta.env.BASE_URL.
 export default defineConfig({
   output: 'server',
-  adapter: cloudflare({ platformProxy: { enabled: true } }),
+  adapter: cloudflare({ platformProxy: { enabled: true }, imageService: 'passthrough' }),
   integrations: [react(), copyLint()],
   devToolbar: { enabled: false },
   build: { inlineStylesheets: 'auto' },

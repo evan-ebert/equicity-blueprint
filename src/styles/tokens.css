@@ -1,0 +1,25 @@
+/* Equicity tokens, from the Equicity design system (tokens.json). Keep in sync with the design system. */
+:root {
+  --paper: #ffffff;
+  --surface: #f6f7f9;
+  --ink: #0b0c0f;
+  --slate: #5b6168;
+  --blue: #2d7ff9;
+  --blue-ink: #1d5fd1;
+  --blue-tint: #d9e8fc;
+  --pink: #f4527b;
+  --line: #e4e6ea;
+  --line-control: #8a9099;
+  --alert: #b3261e;
+  --on-ink: #ffffff;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
+  --radius-sm: 10px; --radius-md: 16px; --radius-lg: 24px; --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(11, 12, 15, 0.06), 0 8px 24px rgba(11, 12, 15, 0.06);
+  --shadow-pop: 0 12px 32px rgba(11, 12, 15, 0.14);
+  --tap-min: 48px; --content-max: 560px; --logo-height: 22px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-marker: "Caveat Brush", "Segoe Print", "Bradley Hand", cursive;
+  color-scheme: light;
+}
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); }
