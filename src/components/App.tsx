@@ -17,6 +17,8 @@ type Props = {
   initialAnswers: Answers;
   initialUploads: UploadInfo[];
   submittedAt: string | null;
+  /** Evan's read-only look at a client's blueprint: nothing saves, uploads and sending are off. */
+  preview?: boolean;
 };
 
 type Step =
@@ -25,7 +27,7 @@ type Step =
   | { key: string; kind: 'break'; chapter: Chapter }
   | { key: 'review'; kind: 'review' };
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'retrying' | 'expired';
+type SaveState = 'idle' | 'saving' | 'saved' | 'retrying' | 'expired' | 'preview';
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
 const PHOTO_RESIZE_OVER = 4 * 1024 * 1024;
@@ -75,7 +77,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<File> {
 
 // ---------- the app ----------
 
-export default function App({ config, slug, base, initialAnswers, initialUploads, submittedAt: initialSubmittedAt }: Props) {
+export default function App({ config, slug, base, initialAnswers, initialUploads, submittedAt: initialSubmittedAt, preview = false }: Props) {
   const api = (path: string) => `${base}api/${slug}/${path}`;
   const chapters = useMemo(() => buildChapters(config), [config]);
   const owner = config.ownerName;
@@ -85,7 +87,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
   const [answers, setAnswers] = useState<Answers>(initialAnswers);
   const [uploads, setUploads] = useState<UploadInfo[]>(initialUploads);
   const [submittedAt, setSubmittedAt] = useState<string | null>(initialSubmittedAt);
-  const [save, setSave] = useState<SaveState>('idle');
+  const [save, setSave] = useState<SaveState>(preview ? 'preview' : 'idle');
   const [toast, setToast] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [done, setDone] = useState(false);
@@ -107,8 +109,8 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
   }, [chapters, answers]);
 
   const savedPos = typeof answers._pos?.v === 'string' ? (answers._pos.v as string) : null;
-  const [pos, setPos] = useState<string>(() => savedPos ?? 'welcome');
-  const resumed = useRef(!!savedPos && savedPos !== 'welcome');
+  const [pos, setPos] = useState<string>(() => (preview ? 'welcome' : savedPos ?? 'welcome'));
+  const resumed = useRef(!preview && !!savedPos && savedPos !== 'welcome');
   const index = Math.max(0, steps.findIndex((s) => s.key === pos));
   const step = steps[index];
 
@@ -163,13 +165,14 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
 
   const queue = useCallback(
     (qid: string, value: AnswerValue | null, delay = 450) => {
+      if (preview) return;
       pending.current.set(qid, value);
       writePending(slug, pending.current);
       setSave((s) => (s === 'expired' ? s : 'saving'));
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => void flush(), delay);
     },
-    [flush, slug],
+    [flush, slug, preview],
   );
 
   const setAnswer = useCallback(
@@ -187,6 +190,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
 
   // Retry unsaved changes from last time (kept on this device), flush when the connection comes back, and on the way out.
   useEffect(() => {
+    if (preview) return;
     const local = readPending(slug);
     const entries = Object.entries(local).filter(([qid]) => !pending.current.has(qid));
     if (entries.length) {
@@ -258,6 +262,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
   // ----- uploads -----
   const upload: Ctx['upload'] = useCallback(
     async (qid, original, onProgress) => {
+      if (preview) throw new Error('Uploads are off in preview.');
       if (!OK_EXT.test(original.name) && !/^image\//.test(original.type)) throw new Error("That file type isn't supported here. Images, PDF, SVG, AI and EPS all work.");
       let file = original;
       // Big phone photos get resized to web size on the device, so uploads finish quickly on a slow connection.
@@ -295,10 +300,14 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
         xhr.send(form);
       });
     },
-    [owner],
+    [owner, preview],
   );
 
   const removeUpload: Ctx['removeUpload'] = useCallback(async (id) => {
+    if (preview) {
+      setToast('Preview only. Files stay as they are.');
+      return;
+    }
     const res = await fetch(`${api('upload')}?id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => null);
     if (res?.status === 401) setSave('expired');
     if (res?.ok || res?.status === 404) setUploads((u) => u.filter((x) => x.id !== id));
@@ -309,6 +318,11 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
 
   // ----- submit -----
   const submit = async () => {
+    if (preview) {
+      setDone(true);
+      window.scrollTo({ top: 0 });
+      return;
+    }
     setSending(true);
     setSendError(null);
     try {
@@ -347,6 +361,16 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
         save={save}
         onMenu={() => setMenuOpen(true)}
       />
+
+      {preview && (
+        <div className="bp-banner bp-banner--preview" role="note">
+          <Icon name="lock" size={18} />
+          <span>Preview. Nothing you do here is saved, and {config.firstName} won't see it. Sending just shows the done screen.</span>
+          <a className="eq-btn eq-btn--secondary" href={`${base}admin/${slug}`}>
+            Back to admin
+          </a>
+        </div>
+      )}
 
       {save === 'expired' && (
         <div className="bp-banner" role="alert">
@@ -411,7 +435,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
         </nav>
       )}
 
-      {menuOpen && <ChapterMenu chapters={chapters} answers={answers} current={done ? null : chapter?.id ?? null} onClose={() => setMenuOpen(false)} onPick={(c) => go(firstStepOf(c))} onReview={() => go('review')} slug={slug} base={base} />}
+      {menuOpen && <ChapterMenu chapters={chapters} answers={answers} current={done ? null : chapter?.id ?? null} onClose={() => setMenuOpen(false)} onPick={(c) => go(firstStepOf(c))} onReview={() => go('review')} slug={slug} base={base} preview={preview} />}
 
       <div className="bp-toast" role="status" aria-live="polite">
         {toast && (
@@ -459,6 +483,7 @@ function TopBar({ base, chapters, answers, current, label, minutes, save, onMenu
               Will save in a moment
             </>
           )}
+          {save === 'preview' && 'Preview only'}
           {save === 'idle' && (
             <>
               <Icon name="saved" />
@@ -737,7 +762,7 @@ function Done({ config, heading, onBack }: { config: ClientConfig; heading: Reac
   );
 }
 
-function ChapterMenu({ chapters, answers, current, onClose, onPick, onReview, slug, base }: { chapters: Chapter[]; answers: Answers; current: string | null; onClose: () => void; onPick: (c: Chapter) => void; onReview: () => void; slug: string; base: string }) {
+function ChapterMenu({ chapters, answers, current, onClose, onPick, onReview, slug, base, preview }: { chapters: Chapter[]; answers: Answers; current: string | null; onClose: () => void; onPick: (c: Chapter) => void; onReview: () => void; slug: string; base: string; preview: boolean }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -785,11 +810,13 @@ function ChapterMenu({ chapters, answers, current, onClose, onPick, onReview, sl
         <button type="button" className="eq-btn eq-btn--primary eq-btn--block" onClick={onReview}>
           Review and send
         </button>
-        <form method="post" action={`${base}api/${slug}/logout`} style={{ display: 'grid' }}>
-          <button type="submit" className="eq-btn eq-btn--quiet">
-            Sign out on this device
-          </button>
-        </form>
+        {!preview && (
+          <form method="post" action={`${base}api/${slug}/logout`} style={{ display: 'grid' }}>
+            <button type="submit" className="eq-btn eq-btn--quiet">
+              Sign out on this device
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

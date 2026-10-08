@@ -7,7 +7,7 @@ import Base from '../../layouts/Base.astro';
 import App from '../../components/App';
 import { Icon } from '../../components/icons';
 import { getClientConfig } from '../../lib/config';
-import { SetupError, clientCookieName, hasClientSession } from '../../lib/auth';
+import { ADMIN_COOKIE, SetupError, clientCookieName, hasAdminSession, hasClientSession } from '../../lib/auth';
 import { getAnswers, getClientRow, listUploads, toPublicUpload } from '../../lib/db';
 import { BASE, getEnv, withBase } from '../../lib/http';
 import type { UploadInfo } from '../../lib/summary';
@@ -20,10 +20,13 @@ let mode: 'missing' | 'gate' | 'app' | 'setup' = 'missing';
 let answers = {};
 let uploads: UploadInfo[] = [];
 let submittedAt: string | null = null;
+let preview = false;
 
 if (config) {
   try {
-    mode = (await hasClientSession(env, config.slug, Astro.cookies.get(clientCookieName(config.slug))?.value)) ? 'app' : 'gate';
+    // Evan's read-only preview: ?preview=1 with a valid admin session. Nothing saves in this mode.
+    preview = Astro.url.searchParams.get('preview') === '1' && (await hasAdminSession(env, Astro.cookies.get(ADMIN_COOKIE)?.value));
+    mode = preview || (await hasClientSession(env, config.slug, Astro.cookies.get(clientCookieName(config.slug))?.value)) ? 'app' : 'gate';
   } catch (e) {
     if (e instanceof SetupError) mode = 'setup';
     else throw e;
@@ -53,7 +56,7 @@ const title = config ? `${config.businessShort} blueprint` : 'Equicity Blueprint
 <Base title={title}>
   {mode === 'app' && config ? (
     <>
-      <App client:load config={config} slug={config.slug} base={BASE} initialAnswers={answers} initialUploads={uploads} submittedAt={submittedAt} />
+      <App client:load config={config} slug={config.slug} base={BASE} initialAnswers={answers} initialUploads={uploads} submittedAt={submittedAt} preview={preview} />
       <noscript>
         <main class="eq-page"><p class="eq-lead">Your blueprint needs JavaScript turned on. Try another browser, or text {owner}.</p></main>
       </noscript>

@@ -76,3 +76,6 @@
 .eq-top { grid-template-columns: minmax(0, 1fr); }
 .eq-top__row > * { min-width: 0; }
 html, body { overflow-x: clip; }
+
+.bp-banner--preview { background: var(--blue-tint); }
+.bp-banner--preview .eq-icon { color: var(--blue-ink); }

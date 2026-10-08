@@ -6,11 +6,11 @@
 import Base from '../../layouts/Base.astro';
 import { Icon } from '../../components/icons';
 import { getAllClientConfigs } from '../../lib/config';
-import { ADMIN_COOKIE, SetupError, clientCookieName, cookieOptions, formatCode, generateCode, hashCode, hasAdminSession, startClientSession } from '../../lib/auth';
+import { ADMIN_COOKIE, SetupError, formatCode, generateCode, hashCode, hasAdminSession } from '../../lib/auth';
 import { getAnswers, getClientRow, listEvents, listUploads, logEvent, resetClientData, setPasscode } from '../../lib/db';
 import { buildChapters, chapterProgress, flatQuestions } from '../../lib/chapters';
 import { buildFlags, buildReview } from '../../lib/summary';
-import { BASE, getEnv, withBase } from '../../lib/http';
+import { getEnv, withBase } from '../../lib/http';
 import { ago, fileSize, pacific, statusLabel } from '../../lib/admin';
 
 const env = getEnv(Astro.locals);
@@ -40,11 +40,6 @@ if (config && Astro.request.method === 'POST') {
     await setPasscode(env.DB, config.slug, h.hash, h.salt);
     await logEvent(env.DB, config.slug, 'passcode-set');
     newCode = formatCode(code);
-  } else if (action === 'preview') {
-    const s = await startClientSession(env, config.slug);
-    Astro.cookies.set(clientCookieName(config.slug), s.token, cookieOptions(BASE, s.days));
-    await logEvent(env.DB, config.slug, 'admin-preview');
-    return Astro.redirect(withBase(config.slug), 303);
   } else if (action === 'reset' && config.slug === 'demo') {
     const keys = await resetClientData(env.DB, config.slug);
     if (keys.length) await env.UPLOADS.delete(keys);
@@ -112,11 +107,10 @@ const eventLabel: Record<string, string> = {
               <button class="eq-btn eq-btn--secondary" type="submit">{row?.passcode_hash ? 'Reset code' : 'Create code'}</button>
             </form>
           )}
-          <form method="post" class="eq-row">
-            <input type="hidden" name="action" value="preview" />
-            <button class="eq-btn eq-btn--quiet" type="submit" style="padding-left:0">Open the client view <Icon name="external" size={16} /></button>
-            <span class="eq-field__help">Anything you change there saves to their answers.</span>
-          </form>
+          <div class="eq-row">
+            <a class="eq-btn eq-btn--quiet" href={withBase(`${config.slug}?preview=1`)} target="_blank" rel="noopener" style="padding-left:0">Preview <Icon name="external" size={16} /></a>
+            <span class="eq-field__help">Read only. Shows their screens with their answers so far; nothing you tap saves.</span>
+          </div>
           {config.slug === 'demo' && (
             <form method="post" class="eq-row">
               <input type="hidden" name="action" value="reset" />
