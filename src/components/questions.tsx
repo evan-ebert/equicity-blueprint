@@ -9,6 +9,8 @@ import { ExampleStage, ImageryStage, LayoutStage, PaletteStage, TYPE_SPECS, Type
 export type Ctx = {
   config: ClientConfig;
   base: string;
+  /** Example ids with a saved screenshot. */
+  previews: string[];
   answers: Answers;
   uploads: UploadInfo[];
   upload: (qid: string, file: File, onProgress: (pct: number) => void) => Promise<void>;
@@ -252,7 +254,8 @@ function Rate({ q, value, set, ctx }: Props) {
       }
       case 'example': {
         const ex = c.examples.find((e) => e.id === id)!;
-        return <ExampleStage url={ex.url} name={ex.name} image={ex.image} base={ctx.base} />;
+        const src = ctx.previews.includes(ex.id) ? `${ctx.base}api/${ctx.config.slug}/preview/${ex.id}` : ex.image ? `${ctx.base}${ex.image.replace(/^\/+/, '')}` : undefined;
+        return <ExampleStage url={ex.url} name={ex.name} src={src} />;
       }
     }
   };

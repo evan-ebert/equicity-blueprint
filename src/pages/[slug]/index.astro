@@ -11,6 +11,7 @@ import { ADMIN_COOKIE, SetupError, clientCookieName, hasAdminSession, hasClientS
 import { getAnswers, getClientRow, listUploads, toPublicUpload } from '../../lib/db';
 import { BASE, getEnv, withBase } from '../../lib/http';
 import type { UploadInfo } from '../../lib/summary';
+import { savedPreviewIds } from '../../lib/previews';
 
 const slug = String(Astro.params.slug ?? '');
 const config = getClientConfig(slug);
@@ -21,6 +22,7 @@ let answers = {};
 let uploads: UploadInfo[] = [];
 let submittedAt: string | null = null;
 let preview = false;
+let previewIds: string[] = [];
 
 if (config) {
   try {
@@ -36,6 +38,7 @@ if (config) {
     answers = a;
     uploads = u.map(toPublicUpload);
     submittedAt = row?.submitted_at ?? null;
+    previewIds = config.examples.length ? await savedPreviewIds(env.UPLOADS, config.slug) : [];
   }
 } else {
   Astro.response.status = 404;
@@ -56,7 +59,7 @@ const title = config ? `${config.businessShort} blueprint` : 'Equicity Blueprint
 <Base title={title}>
   {mode === 'app' && config ? (
     <>
-      <App client:load config={config} slug={config.slug} base={BASE} initialAnswers={answers} initialUploads={uploads} submittedAt={submittedAt} preview={preview} />
+      <App client:load config={config} slug={config.slug} base={BASE} initialAnswers={answers} initialUploads={uploads} submittedAt={submittedAt} preview={preview} previewIds={previewIds} />
       <noscript>
         <main class="eq-page"><p class="eq-lead">Your blueprint needs JavaScript turned on. Try another browser, or text {owner}.</p></main>
       </noscript>

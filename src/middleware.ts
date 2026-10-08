@@ -2,7 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 
 /**
  * Every response is private: never indexed, never framed, no third-party scripts.
- * Images may come from the Pexels CDN (imagery tiles) and WordPress mShots (example site previews).
+ * Images may come from the Pexels CDN (imagery tiles). Example-site screenshots are saved and served by the app.
  */
 /** If Webflow serves built assets from the Worker's own host, allow that host for scripts, styles, fonts and images. */
 const ASSETS = (() => {
@@ -18,7 +18,7 @@ const CSP = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${ASSETS}`,
   `style-src 'self' 'unsafe-inline'${ASSETS}`,
-  `img-src 'self' data: blob: https://images.pexels.com https://*.wp.com${ASSETS}`,
+  `img-src 'self' data: blob: https://images.pexels.com${ASSETS}`,
   `font-src 'self' data:${ASSETS}`,
   "connect-src 'self'",
   "frame-ancestors 'none'",

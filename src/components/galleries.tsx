@@ -184,7 +184,7 @@ export function ImageryStage({ src, label, credit, creditUrl }: { src: string; l
   );
 }
 
-export function ExampleStage({ url, name, image, base }: { url: string; name: string; image?: string; base: string }) {
+export function ExampleStage({ url, name, src }: { url: string; name: string; src?: string }) {
   const [failed, setFailed] = useState(false);
   const host = (() => {
     try {
@@ -193,8 +193,8 @@ export function ExampleStage({ url, name, image, base }: { url: string; name: st
       return url;
     }
   })();
-  // A saved screenshot shipped with the app loads instantly; the live screenshot service is only a fallback.
-  const shot = image ? `${base}${image.replace(/^\/+/, '')}` : `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=1200&h=900`;
+  // Saved screenshots only. Without one, the tile shows a clean name card and the "Open the site" button.
+  const shot = src;
   return (
     <div className="eq-tile__stage" style={{ background: '#F6F7F9' }}>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#5b6168', textAlign: 'center', padding: 16 }}>
@@ -202,7 +202,7 @@ export function ExampleStage({ url, name, image, base }: { url: string; name: st
         <span style={{ font: '400 14px/20px system-ui, sans-serif' }}>{host}</span>
         <span style={{ font: '400 13px/18px system-ui, sans-serif' }}>Tap "Open the site" to see it live.</span>
       </div>
-      {!failed && <img src={shot} alt={`Preview of ${name}`} loading="lazy" onError={() => setFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />}
+      {shot && !failed && <img src={shot} alt={`Preview of ${name}`} loading="lazy" onError={() => setFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />}
     </div>
   );
 }

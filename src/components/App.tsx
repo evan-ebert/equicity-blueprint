@@ -20,6 +20,8 @@ type Props = {
   submittedAt: string | null;
   /** Evan's read-only look at a client's blueprint: nothing saves, uploads and sending are off. */
   preview?: boolean;
+  /** Example ids with a saved screenshot. */
+  previewIds?: string[];
 };
 
 type Step =
@@ -78,7 +80,7 @@ async function shrinkImage(file: File, maxEdge: number): Promise<File> {
 
 // ---------- the app ----------
 
-export default function App({ config, slug, base, initialAnswers, initialUploads, submittedAt: initialSubmittedAt, preview = false }: Props) {
+export default function App({ config, slug, base, initialAnswers, initialUploads, submittedAt: initialSubmittedAt, preview = false, previewIds = [] }: Props) {
   const api = (path: string) => `${base}api/${slug}/${path}`;
   const chapters = useMemo(() => buildChapters(config), [config]);
   const owner = config.ownerName;
@@ -332,7 +334,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
     else setToast("Couldn't remove that file just now. Try again in a moment.");
   }, []);
 
-  const ctx: Ctx = { config, base, answers, uploads, upload, removeUpload };
+  const ctx: Ctx = { config, base, previews: previewIds, answers, uploads, upload, removeUpload };
 
   // ----- submit -----
   const submit = async () => {

@@ -144,3 +144,8 @@ html, body { overflow-x: clip; }
 }
 
 .bp-was { color: var(--slate); text-decoration: line-through; text-decoration-color: rgba(91, 97, 104, 0.5); }
+.bp-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.bp-preview { display: grid; gap: 6px; text-decoration: none; color: inherit; }
+.bp-preview img, .bp-preview__empty { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.bp-preview__empty { display: grid; place-items: center; color: var(--slate); font-size: 13px; }
+.bp-preview__name { font: 600 13px/18px var(--font-sans); }

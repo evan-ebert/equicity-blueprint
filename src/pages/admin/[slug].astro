@@ -12,6 +12,7 @@ import { buildChapters, chapterProgress, flatQuestions } from '../../lib/chapter
 import { buildFlags, buildReview, diffAnswers } from '../../lib/summary';
 import { getEnv, withBase } from '../../lib/http';
 import { ago, fileSize, pacific, statusLabel } from '../../lib/admin';
+import { capturePreviews, savedPreviewIds } from '../../lib/previews';
 
 const env = getEnv(Astro.locals);
 Astro.response.headers.set('Cache-Control', 'private, no-store');
@@ -40,6 +41,9 @@ if (config && Astro.request.method === 'POST') {
     await setPasscode(env.DB, config.slug, h.hash, h.salt);
     await logEvent(env.DB, config.slug, 'passcode-set');
     newCode = formatCode(code);
+  } else if (action === 'previews' || action === 'previews-all') {
+    const r = await capturePreviews(env.UPLOADS, config, action === 'previews-all');
+    notice = r.ready === r.total ? `All ${r.total} site previews are saved.` : `${r.ready} of ${r.total} site previews are saved. The rest are still rendering, so tap Refresh previews again in a minute.`;
   } else if (action === 'reset' && config.slug === 'demo') {
     const keys = await resetClientData(env.DB, config.slug);
     if (keys.length) await env.UPLOADS.delete(keys);
@@ -51,6 +55,7 @@ const [row, answers, uploads, events, sends] = config
   ? await Promise.all([getClientRow(env.DB, config.slug), getAnswers(env.DB, config.slug), listUploads(env.DB, config.slug), listEvents(env.DB, config.slug, 40), listSubmissions(env.DB, config.slug)])
   : [null, {}, [], [], []];
 const chapters = config ? buildChapters(config) : [];
+const previewIds = config ? new Set(await savedPreviewIds(env.UPLOADS, config.slug)) : new Set<string>();
 const review = config ? buildReview(config, answers, uploads, chapters) : [];
 const flags = config ? buildFlags(config, answers, uploads, chapters) : [];
 // Each send compared with the one before it, newest first, plus anything changed since the last send.
@@ -125,6 +130,25 @@ const eventLabel: Record<string, string> = {
             </form>
           )}
         </section>
+
+        {config.examples.length > 0 && (
+          <section class="bp-review" aria-label="Example site previews">
+            <div class="bp-review__head"><h2 class="bp-review__title">Example site previews ({previewIds.size} of {config.examples.length})</h2></div>
+            <p class="eq-muted" style="margin:0;font-size:15px">Saved screenshots load instantly for the client. Refresh after changing the examples in their config.</p>
+            <div class="bp-previews">
+              {config.examples.map((e) => (
+                <a class="bp-preview" href={e.url} target="_blank" rel="noopener">
+                  {previewIds.has(e.id) ? <img src={withBase(`api/${config.slug}/preview/${e.id}`)} alt={`Preview of ${e.name}`} loading="lazy" /> : <span class="bp-preview__empty">Not saved yet</span>}
+                  <span class="bp-preview__name">{e.name}</span>
+                </a>
+              ))}
+            </div>
+            <form method="post" class="eq-row">
+              <button class="eq-btn eq-btn--secondary" type="submit" name="action" value="previews">Refresh previews</button>
+              <button class="eq-btn eq-btn--quiet" type="submit" name="action" value="previews-all">Retake all</button>
+            </form>
+          </section>
+        )}
 
         <section class="bp-review" aria-label="Progress">
           <div class="bp-review__head"><h2 class="bp-review__title">Progress</h2></div>
