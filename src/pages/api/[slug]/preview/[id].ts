@@ -19,5 +19,5 @@ export const GET: APIRoute = async ({ params, locals, cookies }) => {
   if (!ok) return new Response('Not found', { status: 404 });
   const obj = await env.UPLOADS.get(previewKey(config.slug, example.id));
   if (!obj) return new Response('Not found', { status: 404 });
-  return new Response(obj.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400' } });
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'image/jpeg', 'cache-control': 'private, no-cache' } });
 };
