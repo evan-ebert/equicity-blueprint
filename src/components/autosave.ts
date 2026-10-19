@@ -124,6 +124,14 @@ export function useAutosave(opts: AutosaveOptions) {
   const refetching = useRef(false);
   const stopped = useRef(false); // expired or locked: stop sending
 
+  // A lock that arrives later (the round was sent) stops saving for good.
+  useEffect(() => {
+    if (!locked) return;
+    stopped.current = true;
+    window.clearTimeout(timer.current);
+    setSave('locked');
+  }, [locked]);
+
   const setSoft = useCallback((s: SaveState) => setSave((cur) => (cur === 'expired' || cur === 'locked' || cur === 'preview' ? cur : s)), []);
 
   const flush = useCallback(async () => {

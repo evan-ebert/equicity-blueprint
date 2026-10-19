@@ -90,9 +90,32 @@ export function TextBox({
   };
   const change = (s: string) => {
     setText(s);
+    waiting.current = s;
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => commit(s), 700);
+    timer.current = window.setTimeout(() => {
+      waiting.current = null;
+      commit(s);
+    }, 700);
   };
+  // Switching apps mid-word on a phone: commit what's typed right away instead of waiting out the pause.
+  const waiting = useRef<string | null>(null);
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  useEffect(() => {
+    const hide = () => {
+      if (document.visibilityState !== 'hidden' || waiting.current === null) return;
+      window.clearTimeout(timer.current);
+      const s = waiting.current;
+      waiting.current = null;
+      commitRef.current(s);
+    };
+    document.addEventListener('visibilitychange', hide);
+    window.addEventListener('pagehide', hide);
+    return () => {
+      document.removeEventListener('visibilitychange', hide);
+      window.removeEventListener('pagehide', hide);
+    };
+  }, []);
   const common = {
     className: 'eq-input',
     value: text,
@@ -126,7 +149,7 @@ export function TextBox({
   );
 }
 
-function Chip({ on, onClick, children, row, role }: { on: boolean; onClick: () => void; children: React.ReactNode; row?: boolean; role?: 'radio' }) {
+export function Chip({ on, onClick, children, row, role }: { on: boolean; onClick: () => void; children: React.ReactNode; row?: boolean; role?: 'radio' }) {
   const aria = role === 'radio' ? { role: 'radio', 'aria-checked': on } : { 'aria-pressed': on };
   return (
     <button type="button" className={`eq-chip${row ? ' eq-chip--row' : ''}`} onClick={onClick} {...aria}>
@@ -216,7 +239,7 @@ function Multi({ q, value, set }: Props) {
   );
 }
 
-const RATES = [
+export const RATES = [
   { id: 'love', label: 'Love it', icon: 'heart' },
   { id: 'maybe', label: 'Maybe', icon: 'maybe' },
   { id: 'no', label: 'Not for me', icon: 'x' },

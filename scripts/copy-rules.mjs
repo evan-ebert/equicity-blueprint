@@ -1,13 +1,10 @@
 // Client-facing copy rules: no em dashes or en dashes anywhere in app source or client configs.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { BANNED } from './copy-banned.mjs';
 
 const ROOTS = ['src', 'configs'];
 const EXT = /\.(astro|tsx?|jsx?|mjs|json|css|md|html)$/;
-const BANNED = [
-  { ch: '—', name: 'em dash' },
-  { ch: '–', name: 'en dash' },
-];
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {

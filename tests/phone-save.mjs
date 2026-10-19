@@ -118,6 +118,7 @@ try {
     await page.getByRole('button', { name: "Let's start" }).click();
     await page.getByRole('radio', { name: 'Yes' }).click();
     await page.getByPlaceholder(/555|\(/).first().fill('206 555 0100');
+    await sleep(1000); // the text box commits after a short pause
     await waitSave(page, 'Saved');
     state = await ctx.storageState();
     await ctx.close();

@@ -1,0 +1,207 @@
+{
+  "round": 1,
+  "title": "Your homepage direction",
+  "dueDate": "2026-10-22",
+  "estimate": "About 8 minutes",
+  "intro": "Here's the first look at your new site. Two ways the homepage could open, the rest of the homepage, and a first pass at your About page. The words are a draft in your voice, written from your blueprint and our call. Your voice memos will replace them, so react to the feel more than the exact wording. Go with your gut, and skip anything you don't have a reaction to.",
+  "doneNote": "Thank you. I'll read every note and come back with the direction locked by Friday, October 23. Then we build.",
+  "screens": [
+    {
+      "id": "opening",
+      "title": "How should the homepage open?",
+      "items": [
+        {
+          "id": "hero",
+          "type": "decision",
+          "required": true,
+          "prompt": "Which opening feels more like Hart to Heart?",
+          "options": [
+            {
+              "key": "A",
+              "image": "r1-hero-a.jpg",
+              "label": "A: Opens with a couple",
+              "description": "A couple in a hard moment, with the line \"Your family can come back from this.\""
+            },
+            {
+              "key": "B",
+              "image": "r1-hero-b.jpg",
+              "label": "B: Opens with you",
+              "description": "Your photo, with the line \"I get in the middle with you.\" A professional portrait would replace this photo before launch."
+            }
+          ],
+          "notePrompt": "Anything about either one?",
+          "label": "Which homepage opening leads"
+        }
+      ]
+    },
+    {
+      "id": "home",
+      "title": "The rest of your homepage",
+      "intro": "Everything below the opening is the same in both versions.",
+      "items": [
+        {
+          "id": "home-start",
+          "type": "section",
+          "image": "r1-home-start.jpg",
+          "title": "Where do I start?",
+          "about": "Four doors, so a visitor can pick the one that sounds like today."
+        },
+        {
+          "id": "home-work",
+          "type": "section",
+          "image": "r1-home-work.jpg",
+          "title": "The work",
+          "about": "Your three homepage services."
+        },
+        {
+          "id": "home-process",
+          "type": "section",
+          "image": "r1-home-process.jpg",
+          "title": "How it goes",
+          "about": "Your process in four steps."
+        },
+        {
+          "id": "home-about",
+          "type": "section",
+          "image": "r1-home-about.jpg",
+          "title": "About you",
+          "about": "A short introduction that links to your About page."
+        },
+        {
+          "id": "home-podcast",
+          "type": "section",
+          "image": "r1-home-podcast.jpg",
+          "title": "Listen first",
+          "about": "Your two starred podcast episodes."
+        },
+        {
+          "id": "home-groups",
+          "type": "section",
+          "image": "r1-home-groups.jpg",
+          "title": "Groups and cohorts",
+          "about": "Coming soon, with a waitlist."
+        },
+        {
+          "id": "home-book",
+          "type": "section",
+          "image": "r1-home-book.jpg",
+          "title": "Love that Lands",
+          "about": "Two free pages in exchange for an email."
+        },
+        {
+          "id": "home-cta",
+          "type": "section",
+          "image": "r1-home-cta.jpg",
+          "title": "The free call and the footer",
+          "about": "How every page ends."
+        },
+        {
+          "id": "home-phone",
+          "type": "section",
+          "image": "r1-phone.jpg",
+          "title": "On a phone",
+          "about": "Most visitors will see it this way."
+        }
+      ]
+    },
+    {
+      "id": "words",
+      "title": "A few things only you can decide",
+      "items": [
+        {
+          "id": "lines",
+          "type": "lines",
+          "prompt": "These lines fade in and out at the top of the homepage. Which ones sound like what your clients go through?",
+          "lines": [
+            "From confused about why nothing lands, to clear about what she needs.",
+            "From unseen and hurting, to cherished and secure.",
+            "From a family that only talks in a crisis, to a family that can sit at one table.",
+            "From a child who stopped calling, to a conversation that didn't end in a fight.",
+            "From walking on eggshells, to saying what you mean and holding it.",
+            "From chaos, to a calm you can keep."
+          ],
+          "notePrompt": "Any line you'd add or change?",
+          "label": "The \"What changes\" lines"
+        },
+        {
+          "id": "faith",
+          "type": "choice",
+          "prompt": "Your faith shows up in the opening line, the About section, and your About page. How does that feel?",
+          "options": [
+            "About right",
+            "I'd like more",
+            "I'd like less"
+          ],
+          "notePrompt": "Anything specific?",
+          "label": "How much should faith show?"
+        },
+        {
+          "id": "nfd-name",
+          "type": "choice",
+          "prompt": "Here's a proposed name for the narcissistic dynamics page. In the menu it stays \"Narcissistic Family Dynamics,\" since that's what people search for. The page itself would open with: \"Understanding and Recovering From a Narcissistic Family Dynamic,\" with assertiveness training as a named part of the work inside.",
+          "options": [
+            "That works",
+            "Close, let's adjust it",
+            "Let's talk about it"
+          ],
+          "notePrompt": "What would you change?",
+          "label": "Proposed page name"
+        }
+      ]
+    },
+    {
+      "id": "about",
+      "title": "Your About page",
+      "intro": "A first pass. The credential descriptions are placeholders until your memos come in.",
+      "items": [
+        {
+          "id": "about-opening",
+          "type": "section",
+          "image": "r1-about-opening.jpg",
+          "title": "The opening",
+          "about": "Your photo and the line \"I get in the middle, then I help you find the order in it.\""
+        },
+        {
+          "id": "about-story",
+          "type": "section",
+          "image": "r1-about-story.jpg",
+          "title": "Why I do this work",
+          "about": "Your story. Your memos will fill this in."
+        },
+        {
+          "id": "about-beliefs",
+          "type": "section",
+          "image": "r1-about-beliefs.jpg",
+          "title": "What I believe about this work",
+          "about": "Three things you stand for."
+        },
+        {
+          "id": "about-credentials",
+          "type": "section",
+          "image": "r1-about-credentials.jpg",
+          "title": "Credentials and training",
+          "about": "Placeholders for now."
+        },
+        {
+          "id": "about-expect",
+          "type": "section",
+          "image": "r1-about-expect.jpg",
+          "title": "What to expect from me",
+          "about": "How you work, in four lines."
+        }
+      ]
+    },
+    {
+      "id": "else",
+      "title": "Anything else",
+      "items": [
+        {
+          "id": "anything",
+          "type": "open",
+          "prompt": "Anything that felt off, or anything you were hoping to see that isn't here?",
+          "label": "Anything else"
+        }
+      ]
+    }
+  ]
+}

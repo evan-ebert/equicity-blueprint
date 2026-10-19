@@ -1,0 +1,91 @@
+---
+/**
+ * One review round for a client. Same code gate and session as their blueprint. Without a session the gate
+ * carries `next`, so the round link in Evan's email lands here after the code. Evan's ?preview=1 with an
+ * admin session shows any round read only, drafts included.
+ */
+import Base from '../../../layouts/Base.astro';
+import Gate from '../../../components/Gate.astro';
+import RoundApp from '../../../components/RoundApp';
+import { Icon } from '../../../components/icons';
+import { ADMIN_COOKIE, SetupError, clientCookieName, hasAdminSession, hasClientSession } from '../../../lib/auth';
+import { CLIENT_VISIBLE, getRoundAnswers, getRoundAnswersUpdatedAt, listRoundImages } from '../../../lib/db';
+import { BASE, getEnv, withBase } from '../../../lib/http';
+import { loadRound } from '../../../lib/roundAccess';
+
+const env = getEnv(Astro.locals);
+const ctx = await loadRound(env.DB, Astro.params.slug, Astro.params.n);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+let mode: 'missing' | 'gate' | 'setup' | 'notopen' | 'app' = 'missing';
+let preview = false;
+let answers = {};
+let updatedAt: Record<string, string> = {};
+let images: Record<string, { width: number | null; height: number | null }> = {};
+
+if (ctx) {
+  try {
+    preview = Astro.url.searchParams.get('preview') === '1' && (await hasAdminSession(env, Astro.cookies.get(ADMIN_COOKIE)?.value));
+    const signedIn = preview || (await hasClientSession(env, ctx.client.slug, Astro.cookies.get(clientCookieName(ctx.client.slug))?.value));
+    mode = !signedIn ? 'gate' : preview || CLIENT_VISIBLE.includes(ctx.round.status) ? 'app' : 'notopen';
+  } catch (e) {
+    if (e instanceof SetupError) mode = 'setup';
+    else throw e;
+  }
+  if (mode === 'app') {
+    const [a, t, imgs] = await Promise.all([getRoundAnswers(env.DB, ctx.round.id), getRoundAnswersUpdatedAt(env.DB, ctx.round.id), listRoundImages(env.DB, ctx.round.id)]);
+    answers = a;
+    updatedAt = t;
+    images = Object.fromEntries(imgs.map((i) => [i.name, { width: i.width, height: i.height }]));
+  }
+} else {
+  Astro.response.status = 404;
+}
+const e = Astro.url.searchParams.get('e') ?? '';
+const title = ctx ? `Round ${ctx.round.number}: ${ctx.client.businessShort}` : 'Equicity Blueprint';
+---
+<Base title={title}>
+  {mode === 'app' && ctx ? (
+    <>
+      <RoundApp
+        client:load
+        slug={ctx.client.slug}
+        base={BASE}
+        number={ctx.round.number}
+        config={ctx.config}
+        ownerName={ctx.client.ownerName}
+        firstName={ctx.client.firstName}
+        business={ctx.client.businessShort}
+        status={ctx.round.status}
+        submittedAt={ctx.round.submitted_at}
+        dueDate={ctx.round.due_date}
+        initialAnswers={answers}
+        initialUpdatedAt={updatedAt}
+        serverNow={new Date().toISOString()}
+        images={images}
+        preview={preview}
+      />
+      <noscript>
+        <main class="eq-page"><p class="eq-lead">This page needs JavaScript turned on. Try another browser, or text {ctx.client.ownerName}.</p></main>
+      </noscript>
+    </>
+  ) : mode === 'missing' ? (
+    <main class="eq-page bp-gate">
+      <img class="eq-top__logo" src={`${BASE}equicity-logo.png`} alt="Equicity" width="110" height="22" />
+      <h1 class="eq-h1">We couldn't find that round.</h1>
+      <p class="eq-lead">Check the link in the email from Evan. If it still doesn't open, text him and he'll send a fresh one.</p>
+    </main>
+  ) : mode === 'notopen' && ctx ? (
+    <main class="eq-page bp-gate">
+      <img class="eq-top__logo" src={`${BASE}equicity-logo.png`} alt="Equicity" width="110" height="22" />
+      <header class="eq-stack" style="gap:14px">
+        <span class="eq-eyebrow" style="justify-self:start">Round {ctx.round.number}</span>
+        <h1 class="eq-h1">This round isn't open yet.</h1>
+        <p class="eq-lead">{ctx.client.ownerName} will send a note when it's ready for you.</p>
+      </header>
+      <a class="eq-btn eq-btn--secondary" style="justify-self:start" href={withBase(ctx.client.slug)}><Icon name="back" size={18} />Back to your blueprint</a>
+    </main>
+  ) : (
+    <Gate config={ctx!.client} mode={mode === 'setup' ? 'setup' : 'gate'} error={e} next={`${ctx!.client.slug}/review/${ctx!.round.number}`} lead={`Enter the code from ${ctx!.client.ownerName}'s email to open Round ${ctx!.round.number}: ${ctx!.round.title.replace(/^[A-Z]/, (c) => c.toLowerCase())}.`} />
+  )}
+</Base>

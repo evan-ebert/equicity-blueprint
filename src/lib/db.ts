@@ -134,11 +134,17 @@ export async function deleteUploadRow(db: D1Database, id: string) {
 /** Wipe a client's answers, uploads and history but keep their passcode. Used for the demo client only. */
 export async function resetClientData(db: D1Database, slug: string): Promise<string[]> {
   const keys = (await listUploads(db, slug)).map((u) => u.r2_key);
+  const imgs = await db.prepare('SELECT r2_key, display_key FROM round_images WHERE round_id IN (SELECT id FROM rounds WHERE slug = ?)').bind(slug).all<{ r2_key: string; display_key: string }>();
+  for (const i of imgs.results ?? []) keys.push(...[i.r2_key, i.display_key].filter(Boolean));
   await db.batch([
     db.prepare('DELETE FROM answers WHERE slug = ?').bind(slug),
     db.prepare('DELETE FROM uploads WHERE slug = ?').bind(slug),
     db.prepare('DELETE FROM events WHERE slug = ?').bind(slug),
     db.prepare('DELETE FROM submissions WHERE slug = ?').bind(slug),
+    db.prepare('DELETE FROM round_answers WHERE round_id IN (SELECT id FROM rounds WHERE slug = ?)').bind(slug),
+    db.prepare('DELETE FROM round_submissions WHERE round_id IN (SELECT id FROM rounds WHERE slug = ?)').bind(slug),
+    db.prepare('DELETE FROM round_images WHERE round_id IN (SELECT id FROM rounds WHERE slug = ?)').bind(slug),
+    db.prepare('DELETE FROM rounds WHERE slug = ?').bind(slug),
     db.prepare(`UPDATE clients SET status = 'not-started', first_opened_at = NULL, last_activity_at = NULL, submitted_at = NULL WHERE slug = ?`).bind(slug),
   ]);
   return keys;

@@ -1,0 +1,45 @@
+---
+/** The code gate: a plain form that works without JavaScript. `next` is where to land once the code is in. */
+import { Icon } from './icons';
+import type { ClientConfig } from '../lib/config';
+import { BASE, withBase } from '../lib/http';
+
+interface Props {
+  config: ClientConfig;
+  mode: 'gate' | 'setup';
+  error?: string;
+  next?: string;
+  lead?: string;
+}
+const { config, mode, error, next, lead } = Astro.props;
+const owner = config.ownerName;
+const errors: Record<string, string> = {
+  code: `That code didn't match. Check the email from ${owner} and try again. Capital letters and spaces don't matter.`,
+  wait: 'Too many tries for now. Take a short break and try again in about 15 minutes.',
+  notready: `Your blueprint isn't open yet. ${owner} will send your code when it's ready.`,
+  setup: `Something isn't set up on our end yet. Text ${owner} and we'll sort it out.`,
+};
+const errorText = mode === 'setup' ? errors.setup : error ? errors[error] : undefined;
+---
+<main class="eq-page bp-gate">
+  <img class="eq-top__logo" src={`${BASE}equicity-logo.png`} alt="Equicity" width="110" height="22" />
+  <header class="eq-stack" style="gap:14px">
+    <span class="eq-eyebrow" style="justify-self:start">Your blueprint</span>
+    <h1 class="eq-h1">Hi {config.firstName}, welcome in.</h1>
+    <p class="eq-lead">{lead ?? `Enter the code from ${owner}'s email to open your ${config.businessShort} blueprint.`}</p>
+  </header>
+  {errorText && (
+    <p class="bp-alert" role="alert"><Icon name="alert" size={18} /><span>{errorText}</span></p>
+  )}
+  {mode === 'gate' && (
+    <form method="post" action={withBase(`api/${config.slug}/login`)}>
+      {next && <input type="hidden" name="next" value={next} />}
+      <label class="eq-field">
+        <span class="eq-field__label">Your code</span>
+        <input class="eq-input eq-input--code" name="code" required minlength="4" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABC 234" />
+      </label>
+      <button type="submit" class="eq-btn eq-btn--primary eq-btn--block">{next && next !== config.slug ? 'Open the round' : 'Open my blueprint'}</button>
+    </form>
+  )}
+  <p class="bp-note"><Icon name="lock" /><span>Private to you and {owner}. Once you're in, this device remembers you, and you can open the same link on any other device with the same code.</span></p>
+</main>

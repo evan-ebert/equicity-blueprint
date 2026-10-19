@@ -1,0 +1,395 @@
+---
+/**
+ * One review round in admin: create it from a config, upload its images (resized in this browser),
+ * open it, watch progress, read what was sent, export the markdown, reopen.
+ */
+import Base from '../../../../layouts/Base.astro';
+import { Icon } from '../../../../components/icons';
+import { getAllClientConfigs } from '../../../../lib/config';
+import { ADMIN_COOKIE, SetupError, hasAdminSession } from '../../../../lib/auth';
+import { createRound, getRound, getRoundAnswers, getRoundLastActivity, listRoundEvents, listRoundImages, listRoundSubmissions, logEvent, setRoundStatus, updateRoundConfig, type RoundStatus } from '../../../../lib/db';
+import { buildRoundSummary, configImages, countsText, diffRoundAnswers, longDate, parseRoundConfig, validateRoundConfig, visitedRoundScreens, RATING_TEXT, type RoundConfig } from '../../../../lib/rounds';
+import { parseRoundNumber } from '../../../../lib/roundAccess';
+import { getEnv, withBase } from '../../../../lib/http';
+import { ago, pacific } from '../../../../lib/admin';
+
+const env = getEnv(Astro.locals);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+let authed = false;
+try {
+  authed = await hasAdminSession(env, Astro.cookies.get(ADMIN_COOKIE)?.value);
+} catch (e) {
+  if (!(e instanceof SetupError)) throw e;
+}
+if (!authed) return Astro.redirect(withBase('admin'), 303);
+
+const client = getAllClientConfigs().find((c) => c.slug === Astro.params.slug);
+const number = parseRoundNumber(Astro.params.n);
+if (!client || number === null) Astro.response.status = 404;
+
+let round = client && number !== null ? await getRound(env.DB, client.slug, number) : null;
+let problems: string[] = [];
+let notice: string | null = null;
+// What the form shows: the stored config, or what was just submitted when it failed validation.
+let formTitle = round?.title ?? '';
+let formDue = round?.due_date ?? '';
+let formIntro = '';
+let formDone = '';
+let formConfig = round ? JSON.stringify(JSON.parse(round.config), null, 2) : '';
+let config: RoundConfig | null = round ? parseRoundConfig(round.config) : null;
+if (config) {
+  formIntro = config.intro;
+  formDone = config.doneNote;
+}
+
+if (client && number !== null && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData().catch(() => null);
+  const action = String(form?.get('action') ?? '');
+  if (action === 'save') {
+    const file = form?.get('config_file');
+    let text = file instanceof File && file.size > 0 ? await file.text() : String(form?.get('config') ?? '');
+    formTitle = String(form?.get('title') ?? '').trim();
+    formDue = String(form?.get('due_date') ?? '').trim();
+    formIntro = String(form?.get('intro') ?? '').trim();
+    formDone = String(form?.get('done_note') ?? '').trim();
+    let raw: any = null;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      problems = ['The config is not valid JSON. Paste the whole file, starting with { and ending with }.'];
+    }
+    if (raw && typeof raw === 'object') {
+      // Fields on the form win over the config when filled in; blank fields take the config's values.
+      if (formTitle) raw.title = formTitle;
+      if (formDue) raw.dueDate = formDue;
+      if (formIntro) raw.intro = formIntro;
+      if (formDone) raw.doneNote = formDone;
+      if (raw.round !== number) {
+        if (raw.round !== undefined) notice = `The config said round ${raw.round}; it was saved as round ${number} to match this page.`;
+        raw.round = number;
+      }
+      const v = validateRoundConfig(raw);
+      if (!v.ok) problems = v.problems;
+      else {
+        const json = JSON.stringify(v.config);
+        if (round) await updateRoundConfig(env.DB, round.id, { title: v.config.title, config: json, due_date: v.config.dueDate ?? null });
+        else await createRound(env.DB, { slug: client.slug, number, title: v.config.title, config: json, due_date: v.config.dueDate ?? null });
+        round = await getRound(env.DB, client.slug, number);
+        config = v.config;
+        formTitle = v.config.title;
+        formDue = v.config.dueDate ?? '';
+        formIntro = v.config.intro;
+        formDone = v.config.doneNote;
+        formConfig = JSON.stringify(v.config, null, 2);
+        notice = `${notice ? notice + ' ' : ''}Round ${number} saved. ${configImages(v.config).length} images to upload.`;
+      }
+    }
+    if (problems.length) formConfig = text;
+  } else if (round && config && (action === 'open' || action === 'close' || action === 'reopen')) {
+    const have = new Set((await listRoundImages(env.DB, round.id)).filter((i) => i.r2_key && i.display_key).map((i) => i.name));
+    const missing = configImages(config).filter((n) => !have.has(n));
+    const next: RoundStatus | null = action === 'open' ? 'open' : action === 'close' ? 'closed' : 'reopened';
+    if (action === 'open' && missing.length) notice = `Not opened: ${missing.length} image${missing.length === 1 ? ' is' : 's are'} still missing (${missing.join(', ')}).`;
+    else if (action === 'reopen' && !['submitted', 'closed'].includes(round.status)) notice = 'Only a sent or closed round can be reopened.';
+    else {
+      await setRoundStatus(env.DB, round.id, next);
+      if (action === 'open') await logEvent(env.DB, client.slug, 'round-opened', { round: number, by: 'admin' });
+      if (action === 'reopen') await logEvent(env.DB, client.slug, 'round-reopened', { round: number });
+      round = await getRound(env.DB, client.slug, number);
+      notice = action === 'open' ? `Round ${number} is open. Copy the link below into your email.` : action === 'close' ? `Round ${number} is closed.` : `Round ${number} is reopened. ${client.firstName} can edit and send again; the first send is kept.`;
+    }
+  }
+}
+
+const images = round ? await listRoundImages(env.DB, round.id) : [];
+const ready = new Map(images.map((i) => [i.name, !!(i.r2_key && i.display_key)]));
+const wanted = config ? configImages(config) : [];
+const readyCount = wanted.filter((n) => ready.get(n)).length;
+const allReady = wanted.length > 0 && readyCount === wanted.length;
+const [answers, lastActivity, sends, events] = round ? await Promise.all([getRoundAnswers(env.DB, round.id), getRoundLastActivity(env.DB, round.id), listRoundSubmissions(env.DB, round.id), listRoundEvents(env.DB, client!.slug, number!)]) : [{}, null, [], []];
+const summary = config ? buildRoundSummary(config, answers) : null;
+const visited = visitedRoundScreens(answers);
+const sendHistory = config ? sends.map((s, i) => ({ at: s.created_at, n: i + 1, changes: i === 0 ? [] : diffRoundAnswers(config, sends[i - 1].answers, s.answers) })).reverse() : [];
+const sinceLast = config && sends.length ? diffRoundAnswers(config, sends[sends.length - 1].answers, answers) : [];
+const origin = env.PUBLIC_ORIGIN || Astro.url.origin;
+const link = client ? `${origin}${withBase(`${client.slug}/review/${number}`)}` : '';
+const statusText: Record<string, string> = { draft: 'Draft', open: 'Open', submitted: 'Sent', reopened: 'Reopened', closed: 'Closed' };
+const eventLabel = (type: string, data: string | null) => {
+  let d: any = null;
+  try {
+    d = data ? JSON.parse(data) : null;
+  } catch {
+    /* ignore */
+  }
+  if (type === 'round-opened') return 'Round opened';
+  if (type === 'round-screen-viewed') return `Reached ${d?.screen === 'intro' ? 'the intro' : `screen "${config?.screens.find((s) => s.id === d?.screen)?.title ?? d?.screen}"`}`;
+  if (type === 'round-submitted') return d?.resend ? `Sent again (${d.changes} changed)` : 'Sent the round';
+  if (type === 'round-reopened') return 'Reopened from admin';
+  return type;
+};
+const api = client ? withBase(`api/admin/${client.slug}/review/${number}/image`) : '';
+---
+<Base title={client ? `Round ${number} · ${client.businessShort} · admin` : 'Not found'}>
+  <main class="eq-page" style="max-width:760px">
+    {client ? <a class="eq-btn eq-btn--quiet" style="justify-self:start" href={withBase(`admin/${client.slug}`)}><Icon name="back" size={18} />{client.businessShort}</a> : <a class="eq-btn eq-btn--quiet" style="justify-self:start" href={withBase('admin')}><Icon name="back" size={18} />All clients</a>}
+    {!client || number === null ? (
+      <h1 class="eq-h1">No round at that link.</h1>
+    ) : (
+      <>
+        <header class="eq-stack" style="gap:10px">
+          <span class="eq-eyebrow" style="justify-self:start">{round ? statusText[round.status] : 'New round'}</span>
+          <h1 class="eq-h1">Round {number}{round ? `: ${round.title}` : ''}</h1>
+          <p class="eq-muted" style="margin:0">
+            {client.business}
+            {round?.due_date && ` · due ${longDate(round.due_date)}`}
+            {round?.opened_at && ` · opened ${pacific(round.opened_at)}`}
+            {lastActivity && ` · active ${ago(lastActivity)}`}
+            {round?.submitted_at && ` · sent ${pacific(round.submitted_at)}`}
+          </p>
+        </header>
+
+        {notice && <p class="bp-note"><Icon name="saved" /><span>{notice}</span></p>}
+
+        {round && config && (
+          <section class="bp-review" aria-label="Link and actions">
+            <div class="bp-review__head"><h2 class="bp-review__title">Link and actions</h2></div>
+            <div class="eq-stack" style="gap:6px">
+              <span class="eq-field__label">Round link</span>
+              <div class="eq-row" style="flex-wrap:nowrap">
+                <input class="eq-input" readonly value={link} aria-label="Round link" />
+                <button type="button" class="eq-btn eq-btn--secondary" data-copy={link}>Copy</button>
+              </div>
+              <span class="eq-field__help">Same code as their blueprint. After the code, they land on this round.</span>
+            </div>
+            <div class="eq-row">
+              <a class="eq-btn eq-btn--quiet" href={withBase(`${client.slug}/review/${number}?preview=1`)} target="_blank" rel="noopener" style="padding-left:0">Preview <Icon name="external" size={16} /></a>
+              <a class="eq-btn eq-btn--quiet" href={withBase(`api/admin/${client.slug}/review/${number}/export.md`)}>Export markdown</a>
+              <a class="eq-btn eq-btn--quiet" href={withBase(`api/admin/${client.slug}/review/${number}/export.md?view=1`)} target="_blank" rel="noopener">View</a>
+            </div>
+            <form method="post" class="eq-row">
+              {(round.status === 'draft' || round.status === 'closed') && (
+                <button class="eq-btn eq-btn--primary" type="submit" name="action" value="open" disabled={!allReady} title={allReady ? undefined : 'Upload every image first'}>
+                  {round.status === 'closed' ? 'Open again' : 'Open round'}
+                </button>
+              )}
+              {(round.status === 'open' || round.status === 'reopened') && <button class="eq-btn eq-btn--secondary" type="submit" name="action" value="close">Close round</button>}
+              {(round.status === 'submitted' || round.status === 'closed') && <button class="eq-btn eq-btn--secondary" type="submit" name="action" value="reopen">Reopen for changes</button>}
+              {!allReady && round.status === 'draft' && <span class="eq-field__help">Open stays off until all {wanted.length} images are uploaded ({readyCount} so far).</span>}
+            </form>
+          </section>
+        )}
+
+        {round && config && (
+          <section class="bp-review" aria-label="Images">
+            <div class="bp-review__head"><h2 class="bp-review__title">Images ({readyCount} of {wanted.length})</h2></div>
+            <p class="eq-muted" style="margin:0;font-size:15px">JPG or PNG up to 10 MB each, named exactly as the config names them. Each one is resized here in your browser to a 1200 px display copy; the original is kept for the full-size viewer.</p>
+            <div class="bp-imgs">
+              {wanted.map((name) => {
+                const img = images.find((i) => i.name === name);
+                return (
+                  <div class="bp-img" data-ready={ready.get(name) ? 'true' : 'false'} data-name={name}>
+                    <span>
+                      <span class="bp-img__name">{name}</span>
+                      <span class="bp-img__meta bp-img__status" style="display:block">{ready.get(name) ? `Uploaded${img?.width ? `, ${img.width} x ${img.height}` : ''}` : img ? 'Half uploaded, upload it again' : 'Missing'}</span>
+                    </span>
+                    <span class="eq-row" style="gap:4px">
+                      <label class="eq-btn eq-btn--quiet bp-img__btn">
+                        {ready.get(name) ? 'Replace' : 'Upload'}
+                        <input type="file" accept="image/jpeg,image/png" data-upload={name} style="position:absolute;width:1px;height:1px;opacity:0" />
+                      </label>
+                      {img && <button type="button" class="eq-btn eq-btn--quiet bp-img__btn" data-remove={name}>Remove</button>}
+                    </span>
+                    <span class="bp-img__bar" hidden><span></span></span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        <section class="bp-review" aria-label="Config">
+          <div class="bp-review__head"><h2 class="bp-review__title">{round ? 'Config' : 'Create this round'}</h2></div>
+          {problems.length > 0 && (
+            <div class="eq-stack" style="gap:6px">
+              <span class="eq-field__warn"><Icon name="alert" size={18} /><span>Not saved. Fix these and try again:</span></span>
+              <ul class="bp-problems">{problems.map((p) => <li>{p}</li>)}</ul>
+            </div>
+          )}
+          <form method="post" enctype="multipart/form-data" class="eq-stack" style="gap:14px">
+            <input type="hidden" name="action" value="save" />
+            <div class="eq-row" style="align-items:stretch">
+              <label class="eq-field" style="flex:1 1 220px"><span class="eq-field__label">Title</span><input class="eq-input" name="title" value={formTitle} placeholder="From the config when blank" /></label>
+              <label class="eq-field" style="flex:0 1 180px"><span class="eq-field__label">Due date</span><input class="eq-input" name="due_date" type="date" value={formDue} /></label>
+            </div>
+            <label class="eq-field"><span class="eq-field__label">Intro note</span><textarea class="eq-input" name="intro" rows="3" placeholder="From the config when blank">{formIntro}</textarea></label>
+            <label class="eq-field"><span class="eq-field__label">Done note</span><textarea class="eq-input" name="done_note" rows="2" placeholder="From the config when blank">{formDone}</textarea></label>
+            <label class="eq-field"><span class="eq-field__label">Config JSON</span><textarea class="eq-input" name="config" rows="14" style="font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:18px" placeholder={'{ "round": ' + number + ', "title": "...", "screens": [ ... ] }'}>{formConfig}</textarea></label>
+            <label class="eq-field"><span class="eq-field__label">Or upload a .json file</span><input class="eq-input" type="file" name="config_file" accept="application/json,.json" /><span class="eq-field__help">A file replaces whatever is in the box. Every text is checked for em and en dashes, like the build does for the repo.</span></label>
+            <button class="eq-btn eq-btn--primary" type="submit" style="justify-self:start">{round ? 'Save config' : 'Create round'}</button>
+          </form>
+        </section>
+
+        {round && config && summary && (
+          <>
+            <section class="bp-review" aria-label="Progress">
+              <div class="bp-review__head"><h2 class="bp-review__title">Progress</h2></div>
+              <ol class="bp-toc">
+                {config.screens.map((s, i) => {
+                  const items = summary.screens[i].items;
+                  const answered = items.filter((x) => x.answered).length;
+                  return (
+                    <li>
+                      <span class="bp-toc__n">{i + 1}</span>
+                      <span class="bp-toc__t">{s.title}</span>
+                      <span class="bp-toc__m">{visited.has(s.id) ? 'Passed' : answered ? 'Started' : 'Not yet'} · {answered} of {items.length}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+              <p class="eq-muted" style="margin:0;font-size:15px">{lastActivity ? `Last activity ${pacific(lastActivity)}.` : 'Not started yet.'} {countsText(summary.counts)}</p>
+              {summary.attention.length > 0 && (
+                <div class="eq-stack" style="gap:6px">
+                  <span class="eq-why__label">Needs attention ({summary.attention.length})</span>
+                  <ul style="margin:0;padding-left:20px;display:grid;gap:4px;font-size:15px;line-height:22px">{summary.attention.map((a) => <li>{a}</li>)}</ul>
+                </div>
+              )}
+            </section>
+
+            {sends.length > 0 && (
+              <section class="bp-review" aria-label="Sends">
+                <div class="bp-review__head"><h2 class="bp-review__title">Sends ({sends.length})</h2></div>
+                <p class="eq-muted" style="margin:0;font-size:15px">A copy is kept every time they send, so the first send is never lost.</p>
+                {sinceLast.length > 0 && (
+                  <div class="eq-stack" style="gap:8px">
+                    <span class="eq-why__label">Changed since their last send, not sent yet</span>
+                    <dl class="bp-review__list">{sinceLast.map((ch) => <div><dt>{ch.title}</dt><dd><span class="bp-was">Was: {ch.before}</span><br />Now: {ch.after}</dd></div>)}</dl>
+                  </div>
+                )}
+                {sendHistory.map((h) => (
+                  <div class="eq-stack" style="gap:8px">
+                    <span class="eq-why__label">Send {h.n} · {pacific(h.at)}</span>
+                    {h.n === 1 ? <p class="eq-muted" style="margin:0;font-size:15px">The first send.</p> : h.changes.length ? <dl class="bp-review__list">{h.changes.map((ch) => <div><dt>{ch.title}</dt><dd><span class="bp-was">Was: {ch.before}</span><br />Now: {ch.after}</dd></div>)}</dl> : <p class="eq-muted" style="margin:0;font-size:15px">Nothing changed.</p>}
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {summary.screens.map((s) => (
+              <section class="bp-review" aria-label={s.title}>
+                <div class="bp-review__head"><h2 class="bp-review__title">{s.title}</h2></div>
+                <dl class="bp-review__list">
+                  {s.items.map((it) => (
+                    <div>
+                      <dt>{it.title}</dt>
+                      <dd>
+                        {it.type === 'lines' && it.lines ? (
+                          <ul class="bp-lines-sum">{it.lines.map((l) => <li><b>{l.rating ? RATING_TEXT[l.rating] : 'No comment'}:</b> {l.text}</li>)}</ul>
+                        ) : it.type === 'section' ? (
+                          it.answer || 'No comments (approved)'
+                        ) : (
+                          it.answer || <span class="eq-muted">Nothing yet</span>
+                        )}
+                        {it.tags.length > 0 && <span class="eq-status" style="margin-left:8px">{it.tags.join(', ')}</span>}
+                        {it.note && <span class="bp-review__note">"{it.note}"</span>}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+
+            <section class="bp-review" aria-label="History">
+              <div class="bp-review__head"><h2 class="bp-review__title">History</h2></div>
+              {events.length ? (
+                <ul style="margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:15px">{events.map((ev) => <li><span class="eq-muted">{pacific(ev.created_at)}</span> {eventLabel(ev.type, ev.data)}</li>)}</ul>
+              ) : (
+                <p class="eq-muted" style="margin:0">Nothing yet.</p>
+              )}
+            </section>
+          </>
+        )}
+      </>
+    )}
+  </main>
+  <script is:inline define:vars={{ api }}>
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-copy]');
+      if (b) {
+        var text = b.getAttribute('data-copy');
+        var done = function () { var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1600); };
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy this:', text); });
+        else window.prompt('Copy this:', text);
+      }
+      var r = e.target.closest && e.target.closest('[data-remove]');
+      if (r) {
+        var name = r.getAttribute('data-remove');
+        r.disabled = true;
+        fetch(api + '?name=' + encodeURIComponent(name), { method: 'DELETE', credentials: 'same-origin' }).then(function () { location.reload(); });
+      }
+    });
+
+    // Resize in the browser: the original goes up as is, plus a 1200px wide JPEG for the screen.
+    async function displayCopy(file) {
+      var bitmap = await createImageBitmap(file);
+      var scale = Math.min(1, 1200 / bitmap.width);
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      var blob = await new Promise(function (res) { canvas.toBlob(res, 'image/jpeg', 0.85); });
+      var out = { blob: blob, width: bitmap.width, height: bitmap.height };
+      if (bitmap.close) bitmap.close();
+      return out;
+    }
+    function send(form, onProgress) {
+      return new Promise(function (resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', api);
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = function (e) { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        xhr.onload = function () {
+          var body = null;
+          try { body = JSON.parse(xhr.responseText); } catch (e) {}
+          if (xhr.status >= 200 && xhr.status < 300 && body && body.ok) resolve(body);
+          else reject(new Error((body && body.error) || 'Upload failed (' + xhr.status + ')'));
+        };
+        xhr.onerror = function () { reject(new Error('Upload failed. Check your connection.')); };
+        xhr.send(form);
+      });
+    }
+    document.querySelectorAll('[data-upload]').forEach(function (input) {
+      input.addEventListener('change', async function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var name = input.getAttribute('data-upload');
+        var row = input.closest('.bp-img');
+        var status = row.querySelector('.bp-img__status');
+        var bar = row.querySelector('.bp-img__bar');
+        var fill = bar.querySelector('span');
+        bar.hidden = false;
+        var progress = function (base, part) { fill.style.width = Math.round((base + part) * 50) + '%'; };
+        try {
+          if (file.size > 10 * 1024 * 1024) throw new Error('Over 10 MB. Export a smaller JPG.');
+          if (!/^image\/(jpeg|png)$/.test(file.type)) throw new Error('Use a JPG or PNG.');
+          status.textContent = 'Resizing...';
+          var copy = await displayCopy(file);
+          status.textContent = 'Uploading the original...';
+          var f1 = new FormData();
+          f1.append('name', name); f1.append('kind', 'full'); f1.append('width', String(copy.width)); f1.append('height', String(copy.height)); f1.append('file', file, name);
+          await send(f1, function (p) { progress(0, p); });
+          status.textContent = 'Uploading the display copy...';
+          var f2 = new FormData();
+          f2.append('name', name); f2.append('kind', 'display'); f2.append('file', copy.blob, name);
+          await send(f2, function (p) { progress(1, p); });
+          status.textContent = 'Uploaded, ' + copy.width + ' x ' + copy.height;
+          row.setAttribute('data-ready', 'true');
+          location.reload();
+        } catch (err) {
+          status.textContent = 'Not uploaded: ' + (err && err.message ? err.message : err);
+          bar.hidden = true;
+        }
+      });
+    });
+  </script>
+</Base>

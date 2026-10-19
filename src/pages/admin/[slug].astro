@@ -7,7 +7,7 @@ import Base from '../../layouts/Base.astro';
 import { Icon } from '../../components/icons';
 import { getAllClientConfigs } from '../../lib/config';
 import { ADMIN_COOKIE, SetupError, formatCode, generateCode, hashCode, hasAdminSession } from '../../lib/auth';
-import { getAnswers, getClientRow, listEvents, listSubmissions, listUploads, logEvent, resetClientData, setPasscode } from '../../lib/db';
+import { getAnswers, getClientRow, listEvents, listRounds, listSubmissions, listUploads, logEvent, resetClientData, setPasscode } from '../../lib/db';
 import { buildChapters, chapterProgress, flatQuestions } from '../../lib/chapters';
 import { buildFlags, buildReview, diffAnswers } from '../../lib/summary';
 import { getEnv, withBase } from '../../lib/http';
@@ -58,7 +58,7 @@ if (config && Astro.request.method === 'POST') {
   } else if (action === 'reset' && config.slug === 'demo') {
     const keys = await resetClientData(env.DB, config.slug);
     if (keys.length) await env.UPLOADS.delete(keys);
-    notice = 'Demo answers, files and history cleared. The code still works.';
+    notice = 'Demo answers, files, rounds and history cleared. The code still works.';
   }
 }
 
@@ -66,6 +66,9 @@ const [row, answers, uploads, events, sends] = config
   ? await Promise.all([getClientRow(env.DB, config.slug), getAnswers(env.DB, config.slug), listUploads(env.DB, config.slug), listEvents(env.DB, config.slug, 40), listSubmissions(env.DB, config.slug)])
   : [null, {}, [], [], []];
 const chapters = config ? buildChapters(config) : [];
+const rounds = config ? await listRounds(env.DB, config.slug) : [];
+const nextRound = rounds.length ? Math.max(...rounds.map((r) => r.number)) + 1 : 1;
+const roundStatus: Record<string, string> = { draft: 'Draft', open: 'Open', submitted: 'Sent', reopened: 'Reopened', closed: 'Closed' };
 const previewIds = config ? new Set(await savedPreviewIds(env.UPLOADS, config.slug)) : new Set<string>();
 const previewReady = config ? config.examples.filter((e) => e.image || previewIds.has(e.id)).length : 0;
 const review = config ? buildReview(config, answers, uploads, chapters) : [];
@@ -87,6 +90,10 @@ const eventLabel: Record<string, string> = {
   submitted: 'Sent their blueprint',
   'passcode-set': 'New code set',
   'admin-preview': 'You opened the client view',
+  'round-opened': 'Review round opened',
+  'round-screen-viewed': 'Reached a round screen',
+  'round-submitted': 'Sent a review round',
+  'round-reopened': 'Review round reopened',
 };
 ---
 <Base title={config ? `${config.businessShort} · Blueprint admin` : 'Not found'}>
@@ -186,6 +193,31 @@ const eventLabel: Record<string, string> = {
             </form>
           </section>
         )}
+
+        <section class="bp-review" aria-label="Review rounds">
+          <div class="bp-review__head">
+            <h2 class="bp-review__title">Review rounds ({rounds.length})</h2>
+            <a class="eq-btn eq-btn--quiet" href={withBase(`admin/${config.slug}/review/${nextRound}`)}><Icon name="plus" size={16} />New round</a>
+          </div>
+          {rounds.length ? (
+            <ul class="bp-chapters">
+              {rounds.map((r) => (
+                <li>
+                  <a class="bp-chapter" href={withBase(`admin/${config.slug}/review/${r.number}`)} style="text-decoration:none">
+                    <span class="bp-toc__n">{r.number}</span>
+                    <span class="bp-chapter__t">
+                      {r.title}
+                      <span class="bp-chapter__m">{r.due_date ? `Due ${r.due_date}` : 'No due date'}{r.submitted_at ? ` · sent ${pacific(r.submitted_at)}` : r.opened_at ? ` · opened ${pacific(r.opened_at)}` : ''}</span>
+                    </span>
+                    <span class={`eq-status${r.status === 'submitted' ? ' eq-status--done' : ''}`}>{roundStatus[r.status] ?? r.status}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="eq-muted" style="margin:0;font-size:15px">No rounds yet. A round is a design (homepage direction, full site) {config.firstName} reacts to section by section, then sends once.</p>
+          )}
+        </section>
 
         <section class="bp-review" aria-label="Progress">
           <div class="bp-review__head"><h2 class="bp-review__title">Progress</h2></div>

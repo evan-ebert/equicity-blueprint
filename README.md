@@ -20,6 +20,15 @@ The full brief and decisions are in [`docs/brief.md`](docs/brief.md).
 
 To close a client's blueprint, set `"status": "archived"` in their config and push. Their link stops working; their answers stay.
 
+## Review rounds
+
+A review round is how a client reacts to a design: one decision, a reaction on each section, then one Send. Rounds live at `/blueprint/<slug>/review/<n>` behind the same code as the blueprint.
+
+1. In the client's admin page, tap **New round**. Paste or upload the round config (see `configs/rounds/hart-to-heart-r1.json` for the shape; item types are decision, section, lines, choice and open). The config is checked on upload: schema, unique ids, 2 to 4 options, and no em or en dashes anywhere.
+2. Upload every image the config names (JPG or PNG, up to 10 MB). Your browser makes a 1200 px display copy; the original feeds the full-size viewer. Images are private, served only to that client and to you.
+3. **Preview** the round on your phone, then **Open round** and copy the link into your email. After the code, the client lands on the round.
+4. When they send, Slack gets the decision, the counts and what needs attention. **Export markdown** gives `review-round-<slug>-r<n>.md` for the client's Claude project. **Reopen** lets them change and send again; every send is kept.
+
 ## Settings (Webflow Cloud environment variables)
 
 Set these in the Webflow dashboard under the app's environment settings. Never commit them.
@@ -44,6 +53,8 @@ npm run db:apply:local
 # .dev.vars (git-ignored) needs SESSION_SECRET and ADMIN_PASSWORD
 npm run dev
 npm run check   # copy lint plus type check
+node tests/phone-save.mjs     # Part 1: save and resume on a phone (Playwright, dev server running)
+node tests/review-round.mjs   # Part 2: review rounds end to end (Playwright, dev server running)
 ```
 
 Locally the app runs at `http://localhost:4321/<slug>`. On Webflow Cloud everything sits under `/blueprint`.
