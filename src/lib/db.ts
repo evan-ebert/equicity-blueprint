@@ -267,16 +267,25 @@ export async function getRoundLastActivity(db: D1Database, roundId: number): Pro
   return row?.at ?? null;
 }
 
+/** Only an open or reopened round takes changes. The check is part of the write, so a save that races a Send can't land after it. */
+const ROUND_EDITABLE = `EXISTS (SELECT 1 FROM rounds WHERE id = ? AND status IN ('open', 'reopened'))`;
+
 export async function saveRoundAnswer(db: D1Database, roundId: number, itemId: string, value: AnswerValue | null) {
-  if (value === null) await db.prepare('DELETE FROM round_answers WHERE round_id = ? AND item_id = ?').bind(roundId, itemId).run();
+  if (value === null) await db.prepare(`DELETE FROM round_answers WHERE round_id = ? AND item_id = ? AND ${ROUND_EDITABLE}`).bind(roundId, itemId, roundId).run();
   else
     await db
       .prepare(
-        `INSERT INTO round_answers (round_id, item_id, value, updated_at) VALUES (?, ?, ?, datetime('now'))
+        `INSERT INTO round_answers (round_id, item_id, value, updated_at) SELECT ?, ?, ?, datetime('now') WHERE ${ROUND_EDITABLE}
          ON CONFLICT(round_id, item_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       )
-      .bind(roundId, itemId, JSON.stringify(value))
+      .bind(roundId, itemId, JSON.stringify(value), roundId)
       .run();
+}
+
+/** Lock the round as sent. False when it was already sent or closed (a double tap, or two devices at once). */
+export async function claimRoundSubmit(db: D1Database, roundId: number): Promise<boolean> {
+  const r = await db.prepare(`UPDATE rounds SET status = 'submitted', submitted_at = datetime('now') WHERE id = ? AND status IN ('open', 'reopened')`).bind(roundId).run();
+  return (r.meta?.changes ?? 0) === 1;
 }
 
 export async function addRoundSubmission(db: D1Database, roundId: number, answers: Answers) {

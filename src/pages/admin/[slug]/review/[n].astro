@@ -184,6 +184,13 @@ const api = client ? withBase(`api/admin/${client.slug}/review/${number}/image`)
           <section class="bp-review" aria-label="Images">
             <div class="bp-review__head"><h2 class="bp-review__title">Images ({readyCount} of {wanted.length})</h2></div>
             <p class="eq-muted" style="margin:0;font-size:15px">JPG or PNG up to 10 MB each, named exactly as the config names them. Each one is resized here in your browser to a 1200 px display copy; the original is kept for the full-size viewer.</p>
+            <div class="eq-row">
+              <label class="eq-btn eq-btn--secondary" style="position:relative">
+                Upload all at once
+                <input type="file" accept="image/jpeg,image/png" multiple data-upload-all style="position:absolute;width:1px;height:1px;opacity:0" />
+              </label>
+              <span class="eq-field__help" data-upload-all-status>Pick every image together. Each file goes to the row with its name.</span>
+            </div>
             <div class="bp-imgs">
               {wanted.map((name) => {
                 const img = images.find((i) => i.name === name);
@@ -358,38 +365,68 @@ const api = client ? withBase(`api/admin/${client.slug}/review/${number}/image`)
         xhr.send(form);
       });
     }
+    /** Resize and upload one file into the row named `name`. Throws with a plain message on failure. */
+    async function uploadOne(file, name) {
+      var row = document.querySelector('.bp-img[data-name="' + name + '"]');
+      var status = row.querySelector('.bp-img__status');
+      var bar = row.querySelector('.bp-img__bar');
+      var fill = bar.querySelector('span');
+      bar.hidden = false;
+      var progress = function (base, part) { fill.style.width = Math.round((base + part) * 50) + '%'; };
+      try {
+        if (file.size > 10 * 1024 * 1024) throw new Error('Over 10 MB. Export a smaller JPG.');
+        if (!/^image\/(jpeg|png)$/.test(file.type)) throw new Error('Use a JPG or PNG.');
+        status.textContent = 'Resizing...';
+        var copy = await displayCopy(file);
+        status.textContent = 'Uploading the original...';
+        var f1 = new FormData();
+        f1.append('name', name); f1.append('kind', 'full'); f1.append('width', String(copy.width)); f1.append('height', String(copy.height)); f1.append('file', file, name);
+        await send(f1, function (p) { progress(0, p); });
+        status.textContent = 'Uploading the display copy...';
+        var f2 = new FormData();
+        f2.append('name', name); f2.append('kind', 'display'); f2.append('file', copy.blob, name);
+        await send(f2, function (p) { progress(1, p); });
+        status.textContent = 'Uploaded, ' + copy.width + ' x ' + copy.height;
+        row.setAttribute('data-ready', 'true');
+      } catch (err) {
+        status.textContent = 'Not uploaded: ' + (err && err.message ? err.message : err);
+        bar.hidden = true;
+        throw err;
+      }
+    }
     document.querySelectorAll('[data-upload]').forEach(function (input) {
       input.addEventListener('change', async function () {
         var file = input.files && input.files[0];
         if (!file) return;
-        var name = input.getAttribute('data-upload');
-        var row = input.closest('.bp-img');
-        var status = row.querySelector('.bp-img__status');
-        var bar = row.querySelector('.bp-img__bar');
-        var fill = bar.querySelector('span');
-        bar.hidden = false;
-        var progress = function (base, part) { fill.style.width = Math.round((base + part) * 50) + '%'; };
         try {
-          if (file.size > 10 * 1024 * 1024) throw new Error('Over 10 MB. Export a smaller JPG.');
-          if (!/^image\/(jpeg|png)$/.test(file.type)) throw new Error('Use a JPG or PNG.');
-          status.textContent = 'Resizing...';
-          var copy = await displayCopy(file);
-          status.textContent = 'Uploading the original...';
-          var f1 = new FormData();
-          f1.append('name', name); f1.append('kind', 'full'); f1.append('width', String(copy.width)); f1.append('height', String(copy.height)); f1.append('file', file, name);
-          await send(f1, function (p) { progress(0, p); });
-          status.textContent = 'Uploading the display copy...';
-          var f2 = new FormData();
-          f2.append('name', name); f2.append('kind', 'display'); f2.append('file', copy.blob, name);
-          await send(f2, function (p) { progress(1, p); });
-          status.textContent = 'Uploaded, ' + copy.width + ' x ' + copy.height;
-          row.setAttribute('data-ready', 'true');
+          await uploadOne(file, input.getAttribute('data-upload'));
           location.reload();
-        } catch (err) {
-          status.textContent = 'Not uploaded: ' + (err && err.message ? err.message : err);
-          bar.hidden = true;
-        }
+        } catch (err) { /* the row shows why */ }
       });
+    });
+    var all = document.querySelector('[data-upload-all]');
+    if (all) all.addEventListener('change', async function () {
+      var files = Array.prototype.slice.call(all.files || []);
+      if (!files.length) return;
+      var note = document.querySelector('[data-upload-all-status]');
+      var names = Array.prototype.map.call(document.querySelectorAll('.bp-img[data-name]'), function (r) { return r.getAttribute('data-name'); });
+      var matched = [], extra = [];
+      files.forEach(function (f) {
+        var n = f.name.toLowerCase();
+        if (names.indexOf(n) >= 0) matched.push([f, n]); else extra.push(f.name);
+      });
+      all.disabled = true;
+      var failed = 0;
+      for (var i = 0; i < matched.length; i++) {
+        note.textContent = 'Uploading ' + (i + 1) + ' of ' + matched.length + '...';
+        try { await uploadOne(matched[i][0], matched[i][1]); } catch (err) { failed++; }
+      }
+      var msg = (matched.length - failed) + ' of ' + matched.length + ' uploaded.';
+      if (failed) msg += ' ' + failed + ' failed; the rows say why.';
+      if (extra.length) msg += ' Not in the config, so skipped: ' + extra.join(', ') + '.';
+      note.textContent = msg;
+      all.disabled = false;
+      if (!failed && !extra.length) location.reload();
     });
   </script>
 </Base>

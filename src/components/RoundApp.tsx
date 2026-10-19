@@ -701,13 +701,17 @@ function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () =
   const [zoomed, setZoomed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const closeBtn = useRef<HTMLButtonElement>(null);
+  // The parent re-renders while the viewer is open (save state, toasts). Keep the effect to one run, so
+  // it pushes exactly one history entry and the back gesture closes the viewer in one swipe.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     closeBtn.current?.focus();
     document.body.style.overflow = 'hidden';
     // One history entry, so the phone's back gesture closes the viewer instead of leaving the round.
     window.history.pushState({ bpViewer: true }, '');
-    const pop = () => onClose();
+    const pop = () => onCloseRef.current();
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') window.history.back();
     };
@@ -717,12 +721,12 @@ function Viewer({ src, alt, onClose }: { src: string; alt: string; onClose: () =
       window.removeEventListener('popstate', pop);
       document.removeEventListener('keydown', key);
       document.body.style.overflow = '';
-      prev?.focus?.();
+      prev?.focus?.({ preventScroll: true });
     };
-  }, [onClose]);
+  }, []);
   const close = () => {
     if (window.history.state?.bpViewer) window.history.back();
-    else onClose();
+    else onCloseRef.current();
   };
   return (
     <div className="bp-viewer" role="dialog" aria-modal="true" aria-label={alt}>

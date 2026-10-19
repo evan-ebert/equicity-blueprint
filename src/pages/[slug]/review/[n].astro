@@ -86,6 +86,6 @@ const title = ctx ? `Round ${ctx.round.number}: ${ctx.client.businessShort}` : '
       <a class="eq-btn eq-btn--secondary" style="justify-self:start" href={withBase(ctx.client.slug)}><Icon name="back" size={18} />Back to your blueprint</a>
     </main>
   ) : (
-    <Gate config={ctx!.client} mode={mode === 'setup' ? 'setup' : 'gate'} error={e} next={`${ctx!.client.slug}/review/${ctx!.round.number}`} lead={`Enter the code from ${ctx!.client.ownerName}'s email to open Round ${ctx!.round.number}: ${ctx!.round.title.replace(/^[A-Z]/, (c) => c.toLowerCase())}.`} />
+    <Gate config={ctx!.client} mode={mode === 'setup' ? 'setup' : 'gate'} error={e} next={`${ctx!.client.slug}/review/${ctx!.round.number}`} lead={`Enter the same code you use for your blueprint to open Round ${ctx!.round.number}: ${ctx!.round.title.replace(/^[A-Z]/, (c) => c.toLowerCase())}.`} />
   )}
 </Base>

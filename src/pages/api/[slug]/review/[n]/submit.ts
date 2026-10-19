@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireClientRound } from '../../../../../lib/roundAccess';
-import { CLIENT_EDITABLE, addRoundSubmission, getRoundAnswers, listRoundSubmissions, logEvent, setRoundStatus } from '../../../../../lib/db';
+import { CLIENT_EDITABLE, addRoundSubmission, claimRoundSubmit, getRoundAnswers, listRoundSubmissions, logEvent } from '../../../../../lib/db';
 import { buildRoundSlack, buildRoundSummary, diffRoundAnswers } from '../../../../../lib/rounds';
 import { notifySlack } from '../../../../../lib/notify';
 import { errorJson, getEnv, json, withBase } from '../../../../../lib/http';
@@ -11,11 +11,13 @@ export const POST: APIRoute = async ({ params, locals, cookies, url }) => {
   const ctx = await requireClientRound(env, params.slug, params.n, cookies);
   if (ctx instanceof Response) return ctx;
   if (!CLIENT_EDITABLE.includes(ctx.round.status)) return errorJson(409, 'This round was already sent.');
+  const before = buildRoundSummary(ctx.config, await getRoundAnswers(env.DB, ctx.round.id));
+  if (before.missing.length) return errorJson(400, `Pick an option for "${before.missing[0].title}" first.`);
+  // Lock first, then copy: once locked no save can land, so the copy is exactly what was sent.
+  if (!(await claimRoundSubmit(env.DB, ctx.round.id))) return errorJson(409, 'This round was already sent.');
   const [answers, earlier] = await Promise.all([getRoundAnswers(env.DB, ctx.round.id), listRoundSubmissions(env.DB, ctx.round.id)]);
   const summary = buildRoundSummary(ctx.config, answers);
-  if (summary.missing.length) return errorJson(400, `Pick an option for "${summary.missing[0].title}" first.`);
   await addRoundSubmission(env.DB, ctx.round.id, answers);
-  await setRoundStatus(env.DB, ctx.round.id, 'submitted');
   const previous = earlier.at(-1);
   const changes = previous ? diffRoundAnswers(ctx.config, previous.answers, answers) : [];
   await logEvent(env.DB, ctx.client.slug, 'round-submitted', { round: ctx.round.number, resend: !!previous, changes: changes.length, attention: summary.attention.length });
