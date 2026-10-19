@@ -8,7 +8,7 @@ import App from '../../components/App';
 import { Icon } from '../../components/icons';
 import { getClientConfig } from '../../lib/config';
 import { ADMIN_COOKIE, SetupError, clientCookieName, hasAdminSession, hasClientSession } from '../../lib/auth';
-import { getAnswers, getClientRow, listUploads, toPublicUpload } from '../../lib/db';
+import { getAnswers, getAnswersUpdatedAt, getClientRow, listOpenRounds, listUploads, toPublicUpload } from '../../lib/db';
 import { BASE, getEnv, withBase } from '../../lib/http';
 import type { UploadInfo } from '../../lib/summary';
 import { savedPreviewIds } from '../../lib/previews';
@@ -19,7 +19,9 @@ const env = getEnv(Astro.locals);
 
 let mode: 'missing' | 'gate' | 'app' | 'setup' = 'missing';
 let answers = {};
+let updatedAt: Record<string, string> = {};
 let uploads: UploadInfo[] = [];
+let openRounds: { number: number; title: string }[] = [];
 let submittedAt: string | null = null;
 let preview = false;
 let previewIds: string[] = [];
@@ -34,9 +36,11 @@ if (config) {
     else throw e;
   }
   if (mode === 'app') {
-    const [a, u, row] = await Promise.all([getAnswers(env.DB, config.slug), listUploads(env.DB, config.slug), getClientRow(env.DB, config.slug)]);
+    const [a, t, u, row, rounds] = await Promise.all([getAnswers(env.DB, config.slug), getAnswersUpdatedAt(env.DB, config.slug), listUploads(env.DB, config.slug), getClientRow(env.DB, config.slug), listOpenRounds(env.DB, config.slug)]);
     answers = a;
+    updatedAt = t;
     uploads = u.map(toPublicUpload);
+    openRounds = rounds.map((r) => ({ number: r.number, title: r.title }));
     submittedAt = row?.submitted_at ?? null;
     previewIds = config.examples.length ? await savedPreviewIds(env.UPLOADS, config.slug) : [];
   }
@@ -59,7 +63,7 @@ const title = config ? `${config.businessShort} blueprint` : 'Equicity Blueprint
 <Base title={title}>
   {mode === 'app' && config ? (
     <>
-      <App client:load config={config} slug={config.slug} base={BASE} initialAnswers={answers} initialUploads={uploads} submittedAt={submittedAt} preview={preview} previewIds={previewIds} />
+      <App client:load config={config} slug={config.slug} base={BASE} initialAnswers={answers} initialUpdatedAt={updatedAt} serverNow={new Date().toISOString()} initialUploads={uploads} submittedAt={submittedAt} openRounds={openRounds} preview={preview} previewIds={previewIds} />
       <noscript>
         <main class="eq-page"><p class="eq-lead">Your blueprint needs JavaScript turned on. Try another browser, or text {owner}.</p></main>
       </noscript>

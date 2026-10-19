@@ -5,19 +5,27 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientConfig } from '../lib/config';
-import { buildChapters, chapterProgress, isVisible, visitedScreens, type AnswerValue, type Answers, type Chapter, type Screen } from '../lib/chapters';
+import { buildChapters, chapterProgress, isVisible, visitedScreens, type Answers, type Chapter, type Screen } from '../lib/chapters';
 import { burstConfetti } from './confetti';
 import { buildReview, type UploadInfo } from '../lib/summary';
 import { Icon, MarkerCircle } from './icons';
 import { QuestionView, type Ctx } from './questions';
+import { useAutosave, type SaveState } from './autosave';
+import { SaveIndicator } from './save';
 
 type Props = {
   config: ClientConfig;
   slug: string;
   base: string;
   initialAnswers: Answers;
+  /** Server timestamps per answer at render time, so a stale queued answer on this device never wins. */
+  initialUpdatedAt?: Record<string, string>;
+  /** The server's clock at render time. */
+  serverNow?: string | null;
   initialUploads: UploadInfo[];
   submittedAt: string | null;
+  /** Review rounds the client can open right now. */
+  openRounds?: { number: number; title: string }[];
   /** Evan's read-only look at a client's blueprint: nothing saves, uploads and sending are off. */
   preview?: boolean;
   /** Example ids with a saved screenshot. */
@@ -30,35 +38,10 @@ type Step =
   | { key: string; kind: 'break'; chapter: Chapter }
   | { key: 'review'; kind: 'review' };
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'retrying' | 'expired' | 'preview';
-
 const MAX_UPLOAD = 25 * 1024 * 1024;
 const PHOTO_RESIZE_OVER = 4 * 1024 * 1024;
 const OK_EXT = /\.(png|jpe?g|webp|gif|heic|heif|svg|pdf|ai|eps)$/i;
 const BREAK_AFTER_CHAPTER = 4;
-
-// ---------- small storage helpers (per device, best effort) ----------
-
-function readPending(slug: string): Record<string, AnswerValue | null> {
-  try {
-    const raw = localStorage.getItem(`bp:${slug}:pending`);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as { at: number; items: Record<string, AnswerValue | null> };
-    if (!parsed?.items || Date.now() - parsed.at > 14 * 86400_000) return {};
-    return parsed.items;
-  } catch {
-    return {};
-  }
-}
-
-function writePending(slug: string, items: Map<string, AnswerValue | null>) {
-  try {
-    if (!items.size) localStorage.removeItem(`bp:${slug}:pending`);
-    else localStorage.setItem(`bp:${slug}:pending`, JSON.stringify({ at: Date.now(), items: Object.fromEntries(items) }));
-  } catch {
-    // Private mode or storage blocked: the in-memory queue still retries.
-  }
-}
 
 // ---------- images over the size limit get resized in the browser ----------
 
@@ -80,23 +63,52 @@ async function shrinkImage(file: File, maxEdge: number): Promise<File> {
 
 // ---------- the app ----------
 
-export default function App({ config, slug, base, initialAnswers, initialUploads, submittedAt: initialSubmittedAt, preview = false, previewIds = [] }: Props) {
+export default function App({ config, slug, base, initialAnswers, initialUpdatedAt, serverNow, initialUploads, submittedAt: initialSubmittedAt, openRounds = [], preview = false, previewIds = [] }: Props) {
   const api = (path: string) => `${base}api/${slug}/${path}`;
   const chapters = useMemo(() => buildChapters(config), [config]);
   const owner = config.ownerName;
 
-  // Answers, with any changes that never reached the server applied on top.
-  const pending = useRef<Map<string, AnswerValue | null>>(new Map());
-  const [answers, setAnswers] = useState<Answers>(initialAnswers);
   const [uploads, setUploads] = useState<UploadInfo[]>(initialUploads);
   const [submittedAt, setSubmittedAt] = useState<string | null>(initialSubmittedAt);
-  const [save, setSave] = useState<SaveState>(preview ? 'preview' : 'idle');
   const [toast, setToast] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [cheer, setCheer] = useState<{ text: string; n: number } | null>(null);
+
+  // ----- navigation state -----
+  const [pos, setPos] = useState<string>(() => {
+    const saved = typeof initialAnswers._pos?.v === 'string' ? (initialAnswers._pos.v as string) : null;
+    return preview ? 'welcome' : saved ?? 'welcome';
+  });
+  const resumed = useRef(!preview && typeof initialAnswers._pos?.v === 'string' && initialAnswers._pos.v !== 'welcome');
+
+  // ----- saving (shared engine, see autosave.ts) -----
+  const { answers, setAnswer, queue, save, settle, markExpired } = useAutosave({
+    storageKey: `bp:${slug}:pending`,
+    saveUrl: api('answer'),
+    stateUrl: api('state'),
+    initialAnswers,
+    initialUpdatedAt,
+    serverNow,
+    preview,
+    parseState: (body) => {
+      const b = body as { ok?: boolean; answers?: Answers; updatedAt?: Record<string, string>; now?: string };
+      return b?.ok && b.answers ? { answers: b.answers, updatedAt: b.updatedAt, now: b.now } : null;
+    },
+    onRefetch: (merged, body, changed) => {
+      const b = body as { uploads?: UploadInfo[]; submittedAt?: string | null };
+      if (Array.isArray(b.uploads)) setUploads(b.uploads);
+      if (b.submittedAt !== undefined) setSubmittedAt(b.submittedAt);
+      if (!changed) return;
+      // Another device moved on: follow it, so the phone opens where the laptop left off.
+      const p = merged._pos?.v;
+      if (typeof p === 'string') setPos((cur) => (cur === p ? cur : p));
+      setToast('Picked up your latest answers.');
+    },
+    onRejected: (message) => setToast(message ?? "That answer didn't save. Try a shorter version?"),
+  });
 
   // ----- the steps -----
   const steps = useMemo(() => {
@@ -113,125 +125,8 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
   }, [chapters, answers]);
 
   const savedPos = typeof answers._pos?.v === 'string' ? (answers._pos.v as string) : null;
-  const [pos, setPos] = useState<string>(() => (preview ? 'welcome' : savedPos ?? 'welcome'));
-  const resumed = useRef(!preview && !!savedPos && savedPos !== 'welcome');
   const index = Math.max(0, steps.findIndex((s) => s.key === pos));
   const step = steps[index];
-
-  // ----- saving -----
-  const timer = useRef<number | undefined>(undefined);
-  const inflight = useRef(false);
-  const backoff = useRef(2000);
-
-  const flush = useCallback(async () => {
-    window.clearTimeout(timer.current);
-    if (inflight.current || !pending.current.size) return;
-    inflight.current = true;
-    setSave((s) => (s === 'expired' ? s : 'saving'));
-    let failed = false;
-    try {
-      for (const [qid, value] of [...pending.current.entries()]) {
-        const res = await fetch(api('answer'), {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ qid, value }),
-        });
-        if (res.status === 401) {
-          setSave('expired');
-          return;
-        }
-        if (res.status === 400 || res.status === 413) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          setToast(body?.error ?? "That answer didn't save. Try a shorter version?");
-        } else if (!res.ok) {
-          failed = true;
-          break;
-        }
-        if (pending.current.get(qid) === value) pending.current.delete(qid);
-      }
-    } catch {
-      failed = true;
-    } finally {
-      inflight.current = false;
-      writePending(slug, pending.current);
-    }
-    if (failed) {
-      setSave('retrying');
-      timer.current = window.setTimeout(() => void flush(), backoff.current);
-      backoff.current = Math.min(backoff.current * 2, 30000);
-      return;
-    }
-    backoff.current = 2000;
-    if (pending.current.size) timer.current = window.setTimeout(() => void flush(), 50);
-    else setSave((s) => (s === 'expired' ? s : 'saved'));
-  }, [slug]);
-
-  const queue = useCallback(
-    (qid: string, value: AnswerValue | null, delay = 450) => {
-      if (preview) return;
-      pending.current.set(qid, value);
-      writePending(slug, pending.current);
-      setSave((s) => (s === 'expired' ? s : 'saving'));
-      window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => void flush(), delay);
-    },
-    [flush, slug, preview],
-  );
-
-  const setAnswer = useCallback(
-    (qid: string, value: AnswerValue | null) => {
-      setAnswers((a) => {
-        const next = { ...a };
-        if (value === null) delete next[qid];
-        else next[qid] = value;
-        return next;
-      });
-      queue(qid, value);
-    },
-    [queue],
-  );
-
-  // Retry unsaved changes from last time (kept on this device), flush when the connection comes back, and on the way out.
-  useEffect(() => {
-    if (preview) return;
-    const local = readPending(slug);
-    const entries = Object.entries(local).filter(([qid]) => !pending.current.has(qid));
-    if (entries.length) {
-      for (const [qid, v] of entries) pending.current.set(qid, v);
-      setAnswers((a) => {
-        const merged = { ...a };
-        for (const [qid, v] of entries) {
-          if (v === null) delete merged[qid];
-          else merged[qid] = v;
-        }
-        return merged;
-      });
-      const localPos = local._pos?.v;
-      if (typeof localPos === 'string') setPos(localPos);
-    }
-    if (pending.current.size) void flush();
-    const online = () => void flush();
-    const leave = () => {
-      if (document.visibilityState === 'hidden' || !document.visibilityState) {
-        for (const [qid, value] of pending.current.entries()) {
-          try {
-            void fetch(api('answer'), { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ qid, value }) });
-          } catch {
-            // The local copy stays queued for next time.
-          }
-        }
-      }
-    };
-    window.addEventListener('online', online);
-    document.addEventListener('visibilitychange', leave);
-    window.addEventListener('pagehide', leave);
-    return () => {
-      window.removeEventListener('online', online);
-      document.removeEventListener('visibilitychange', leave);
-      window.removeEventListener('pagehide', leave);
-    };
-  }, [flush]);
 
   useEffect(() => {
     if (!cheer) return;
@@ -309,7 +204,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
           } catch {
             // Not JSON: fall through to the generic message.
           }
-          if (xhr.status === 401) setSave('expired');
+          if (xhr.status === 401) markExpired();
           if (xhr.status >= 200 && xhr.status < 300 && body?.ok && body.upload) {
             onProgress(100);
             setUploads((u) => [...u, body!.upload!]);
@@ -329,7 +224,7 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
       return;
     }
     const res = await fetch(`${api('upload')}?id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => null);
-    if (res?.status === 401) setSave('expired');
+    if (res?.status === 401) markExpired();
     if (res?.ok || res?.status === 404) setUploads((u) => u.filter((x) => x.id !== id));
     else setToast("Couldn't remove that file just now. Try again in a moment.");
   }, []);
@@ -347,14 +242,10 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
     setSendError(null);
     try {
       // Let any save in flight finish, then push whatever is still queued, before sending.
-      for (let i = 0; i < 40 && (inflight.current || pending.current.size); i++) {
-        if (!inflight.current) await flush();
-        else await new Promise((r) => window.setTimeout(r, 150));
-      }
-      if (pending.current.size) throw new Error('unsaved');
+      if (!(await settle())) throw new Error('unsaved');
       const res = await fetch(api('submit'), { method: 'POST', credentials: 'same-origin' });
       if (res.status === 401) {
-        setSave('expired');
+        markExpired();
         throw new Error('expired');
       }
       if (!res.ok) throw new Error('failed');
@@ -405,6 +296,8 @@ export default function App({ config, slug, base, initialAnswers, initialUploads
           </button>
         </div>
       )}
+
+      {!done && (step.kind === 'welcome' || step.kind === 'review') && openRounds.length > 0 && <RoundCards base={base} slug={slug} rounds={openRounds} preview={preview} />}
 
       {done ? (
         <Done config={config} heading={heading} onBack={() => go('review')} />
@@ -499,36 +392,33 @@ function nextLabel(steps: Step[], index: number): string {
 
 // ---------- pieces ----------
 
+/** "Round 1 is ready": shown on the client's home while a review round is open for them. */
+function RoundCards({ base, slug, rounds, preview }: { base: string; slug: string; rounds: { number: number; title: string }[]; preview: boolean }) {
+  return (
+    <div className="bp-roundcards">
+      {rounds.map((r) => (
+        <a key={r.number} className="bp-roundcard" href={`${base}${slug}/review/${r.number}${preview ? '?preview=1' : ''}`}>
+          <span className="bp-roundcard__eyebrow">Review round</span>
+          <span className="bp-roundcard__title">Round {r.number} is ready: {r.title.replace(/^[A-Z]/, (c) => c.toLowerCase())}.</span>
+          <span className="bp-roundcard__cta">
+            Open it
+            <Icon name="arrow" size={18} />
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function TopBar({ base, chapters, answers, current, label, minutes, save, onMenu }: { base: string; chapters: Chapter[]; answers: Answers; current: Chapter | null; label: string; minutes: number | null; save: SaveState; onMenu: () => void }) {
   return (
     <header className="eq-top">
       <div className="eq-top__row">
         <img className="eq-top__logo" src={`${base}equicity-logo.png`} alt="Equicity" width={110} height={22} />
-        <span className="eq-top__meta bp-save" data-state={save} aria-live="polite">
-          {save === 'saving' && 'Saving...'}
-          {save === 'saved' && (
-            <>
-              <Icon name="saved" />
-              Saved
-            </>
-          )}
-          {save === 'retrying' && (
-            <>
-              <Icon name="clock" />
-              Will save in a moment
-            </>
-          )}
-          {save === 'preview' && 'Preview only'}
-          {save === 'idle' && (
-            <>
-              <Icon name="saved" />
-              Autosave on
-            </>
-          )}
-        </span>
+        <SaveIndicator state={save} />
         <button type="button" className="eq-btn eq-btn--quiet bp-menu-btn" onClick={onMenu} aria-haspopup="dialog">
           <Icon name="list" size={18} />
-          Chapters
+          <span className="bp-menu-btn__label">Chapters</span>
         </button>
       </div>
       <div className="eq-segs" aria-hidden="true">

@@ -8,7 +8,19 @@
 .bp-save[data-state="retrying"] { color: var(--alert); }
 .bp-save[data-state="retrying"] .eq-icon { color: var(--alert); }
 .bp-menu-btn { min-height: 40px; padding: 0 10px; font-size: 15px; }
-@media (max-width: 380px) { .bp-save { display: none; } }
+/* The save state stays visible on every phone. Below 380px the menu button drops its word to make room. */
+.bp-save__short { display: none; }
+@media (max-width: 380px) {
+  .bp-menu-btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .bp-menu-btn { padding: 0 8px; }
+  .bp-save__long { display: none; }
+  .bp-save__short { display: inline; }
+}
+.bp-save__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--blue); animation: bp-pulse 1s ease-in-out infinite; }
+@keyframes bp-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bp-save__dot { animation: none; } }
+.bp-save[data-state="retrying"] { font-weight: 600; }
+.bp-save[data-state="expired"], .bp-save[data-state="expired"] .eq-icon { color: var(--alert); }
 
 .bp-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 12px 16px 0; padding: 12px 14px; border-radius: var(--radius-md); background: #fdeceb; color: var(--ink); font-size: 15px; line-height: 22px; }
 .bp-banner .eq-icon { color: var(--alert); flex: none; }
@@ -154,3 +166,10 @@ html, body { overflow-x: clip; }
 .bp-preview__name { font: 600 13px/18px var(--font-sans); }
 
 .bp-preview__row { display: flex; gap: 4px; }
+
+/* ---------- Review rounds ---------- */
+.bp-roundcards { display: grid; gap: 10px; width: 100%; max-width: var(--content-max); margin: 20px auto -12px; padding: 0 16px; }
+.bp-roundcard { display: grid; gap: 6px; padding: 16px 18px; border-radius: var(--radius-md); background: var(--ink); color: var(--on-ink); text-decoration: none; box-shadow: var(--shadow-card); }
+.bp-roundcard__eyebrow { font: 700 12px/16px var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.8; }
+.bp-roundcard__title { font: 700 18px/24px var(--font-sans); letter-spacing: -0.01em; }
+.bp-roundcard__cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; color: #bcd7fd; font: 600 15px/20px var(--font-sans); }
